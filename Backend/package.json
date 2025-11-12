@@ -15,9 +15,11 @@
   "dependencies": {
     "@hono/node-server": "^1.19.6",
     "@hono/zod-validator": "^0.7.4",
+    "@types/jsonwebtoken": "^9.0.10",
     "better-sqlite3": "^12.4.1",
     "drizzle-orm": "^0.44.7",
     "hono": "^4.10.5",
+    "jsonwebtoken": "^9.0.2",
     "zod": "^4.1.12"
   },
   "devDependencies": {

@@ -4,19 +4,19 @@
 TBD - created by archiving change design-database-model. Update Purpose after archive.
 ## Requirements
 ### Requirement: 完整数据库模式设计
-The system SHALL provide a complete database schema design to support all business functions of the digital goods automatic delivery system.
+系统 SHALL 设计包含所有业务功能和安全管理所需的完整数据库表结构。
 
 #### Scenario: 创建完整的数据库表结构
-- **WHEN** 系统初始化时
-- **THEN** 创建包含8个核心表的完整数据库结构
-- **AND** 所有表都有适当的字段、类型、约束和索引
-- **AND** 支持SQLite和Cloudflare D1的语法
+- **WHEN** 初始化数据库模式
+- **THEN** 系统必须创建所有核心业务表
+- **AND** 创建安全管理相关的表结构
+- **AND** 建立适当的外键关系和约束
 
 #### Scenario: 数据完整性约束
-- **WHEN** 数据插入或更新时
-- **THEN** 外键约束确保引用完整性
-- **AND** CHECK约束确保数据格式正确
-- **AND** 默认值确保必填字段不为空
+- **WHEN** 设计数据库表
+- **THEN** 系统必须实施主键、外键约束
+- **AND** 设置唯一性约束防止重复数据
+- **AND** 配置适当的检查约束
 
 ### Requirement: 多币种商品定价支持
 The system SHALL support multi-currency product pricing, allowing the same product to have different prices in different currencies.
@@ -203,4 +203,83 @@ The system SHALL provide complete TypeScript type definitions to ensure compile-
   - currency必须是'CNY'或'USD'
   - status必须是预定义的状态值
   - gateway_order_id在同一个gateway下必须唯一
+
+### Requirement: 配置管理表结构
+系统 SHALL 提供灵活的配置管理表结构，支持动态配置和安全存储。
+
+#### Scenario: 配置参数表设计
+- **WHEN** 创建config表
+- **THEN** 系统必须包含配置键名、值、类型字段
+- **AND** 支持配置分组和描述信息
+- **AND** 包含配置版本和最后更新时间
+- **AND** 支持敏感配置的加密标识
+
+#### Scenario: 配置访问优化
+- **WHEN** 查询配置参数
+- **THEN** 系统必须提供快速的配置读取接口
+- **AND** 支持配置分组批量查询
+- **AND** 实施配置缓存机制
+
+### Requirement: 安全审计表结构
+系统 SHALL 记录所有安全相关事件，支持审计和监控需求。
+
+#### Scenario: 审计日志表设计
+- **WHEN** 创建audit_logs表
+- **THEN** 系统必须记录事件时间、类型、严重程度
+- **AND** 包含用户IP地址、用户代理、请求路径
+- **AND** 存储详细的事件描述和相关数据
+- **AND** 支持日志级别的分类管理
+
+#### Scenario: 安全事件跟踪
+- **WHEN** 记录安全事件
+- **THEN** 系统必须能够跟踪完整的攻击链
+- **AND** 关联相关的日志条目
+- **AND** 提供事件的时间线视图
+
+### Requirement: API限流表结构
+系统 SHALL 支持灵活的API限流策略和访问控制。
+
+#### Scenario: 限流记录表设计
+- **WHEN** 创建rate_limits表
+- **THEN** 系统必须记录限流键、计数器、时间窗口
+- **AND** 支持不同类型的限流策略（IP、用户、API）
+- **AND** 包含限流重置时间和违规计数
+- **AND** 支持限流白名单管理
+
+#### Scenario: 限流策略配置
+- **WHEN** 配置限流规则
+- **THEN** 系统必须支持动态调整限流参数
+- **AND** 支持不同API端点的差异化限流
+- **AND** 提供限流策略的实时更新
+
+### Requirement: 安全令牌表结构
+系统 SHALL 管理各种安全令牌的生命周期。
+
+#### Scenario: 令牌管理表设计
+- **WHEN** 创建security_tokens表
+- **THEN** 系统必须存储令牌类型、用途、过期时间
+- **AND** 关联相关的用户或系统资源
+- **AND** 记录令牌的创建、使用、撤销状态
+- **AND** 支持令牌的批量管理和清理
+
+#### Scenario: 令牌生命周期管理
+- **WHEN** 管理安全令牌
+- **THEN** 系统必须支持令牌的自动过期
+- **AND** 提供令牌的主动撤销机制
+- **AND** 实施令牌使用的审计跟踪
+
+### Requirement: 数据库安全索引
+系统 SHALL 优化数据库索引以提升安全相关查询的性能。
+
+#### Scenario: 安全查询索引优化
+- **WHEN** 设计数据库索引
+- **THEN** 系统必须为安全日志查询创建复合索引
+- **AND** 优化限流查询的时间窗口索引
+- **AND** 创建配置查询的高效索引
+
+#### Scenario: 查询性能监控
+- **WHEN** 执行安全相关查询
+- **THEN** 系统必须监控查询性能
+- **AND** 识别慢查询并进行优化
+- **AND** 定期分析索引使用情况
 

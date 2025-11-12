@@ -153,6 +153,111 @@ export const files = sqliteTable('files', {
   createdBy: text('created_by'), // 创建者
 })
 
+// Config - 系统配置管理表（扩展settings表，支持更多配置选项）
+export const config = sqliteTable('config', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  groupKey: text('group_key').notNull(), // 配置分组，如 'payment', 'security', 'email'
+  configKey: text('config_key').notNull(), // 配置键名
+  configValue: text('config_value'), // 配置值
+  dataType: text('data_type').default('string'), // string, number, boolean, json
+  isEncrypted: integer('is_encrypted', { mode: 'boolean' }).default(false), // 是否加密存储
+  isPublic: integer('is_public', { mode: 'boolean' }).default(false), // 是否可公开访问
+  description: text('description'), // 配置描述
+  defaultValue: text('default_value'), // 默认值
+  validationRule: text('validation_rule'), // 验证规则（JSON格式）
+  version: integer('version').default(1), // 配置版本
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+  updatedBy: text('updated_by'), // 更新者
+}, (table) => ({
+  // 确保每个分组内配置键唯一
+  uniqueGroupKey: uniqueIndex('unique_group_config_key').on(table.groupKey, table.configKey),
+}))
+
+// Audit logs - 安全审计日志表（扩展adminLogs表，记录所有安全相关事件）
+export const auditLogs = sqliteTable('audit_logs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  eventType: text('event_type').notNull(), // security, admin, payment, webhook, download
+  eventCategory: text('event_category').notNull(), // auth, access, validation, error, suspicious
+  severity: text('severity').notNull().default('info'), // info, warning, error, critical
+  userId: text('user_id'), // 用户ID（如果适用）
+  userEmail: text('user_email'), // 用户邮箱
+  ipAddress: text('ip_address'), // IP地址
+  userAgent: text('user_agent'), // 用户代理
+  requestPath: text('request_path'), // 请求路径
+  requestMethod: text('request_method'), // 请求方法
+  resourceType: text('resource_type'), // 资源类型
+  resourceId: text('resource_id'), // 资源ID
+  action: text('action'), // 执行的动作
+  result: text('result'), // 结果：success, failure, blocked
+  details: text('details'), // 详细信息（JSON格式）
+  metadata: text('metadata'), // 额外元数据（JSON格式）
+  riskScore: integer('risk_score').default(0), // 风险评分（0-100）
+  sessionId: text('session_id'), // 会话ID
+  traceId: text('trace_id'), // 跟踪ID
+  tags: text('tags'), // 标签（逗号分隔）
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  // 优化常用查询的索引
+  eventTypeIndex: uniqueIndex('idx_audit_event_type').on(table.eventType),
+  severityIndex: uniqueIndex('idx_audit_severity').on(table.severity),
+  createdAtIndex: uniqueIndex('idx_audit_created_at').on(table.createdAt),
+  ipAddressIndex: uniqueIndex('idx_audit_ip_address').on(table.ipAddress),
+}))
+
+// Rate limits - API限流表
+export const rateLimits = sqliteTable('rate_limits', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  limitKey: text('limit_key').notNull(), // 限流键，可以是IP、用户ID等
+  limitType: text('limit_type').notNull(), // ip, user, api_key, global
+  resourceType: text('resource_type'), // API类型或资源类型
+  windowSize: integer('window_size').notNull(), // 时间窗口（秒）
+  maxRequests: integer('max_requests').notNull(), // 最大请求次数
+  currentRequests: integer('current_requests').default(0), // 当前请求次数
+  blockedUntil: text('blocked_until'), // 封禁结束时间
+  isWhitelist: integer('is_whitelist', { mode: 'boolean' }).default(false), // 是否在白名单
+  violationCount: integer('violation_count').default(0), // 违规次数
+  lastViolationAt: text('last_violation_at'), // 最后违规时间
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  // 优化限流查询的索引
+  limitKeyIndex: uniqueIndex('idx_rate_limit_key').on(table.limitKey),
+  limitTypeIndex: uniqueIndex('idx_rate_limit_type').on(table.limitType),
+  blockedUntilIndex: uniqueIndex('idx_rate_blocked_until').on(table.blockedUntil),
+}))
+
+// Security tokens - 安全令牌管理表
+export const securityTokens = sqliteTable('security_tokens', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  tokenType: text('token_type').notNull(), // jwt, download, api_key, reset, verification
+  tokenId: text('token_id').notNull(), // 令牌ID或指纹
+  tokenValue: text('token_value'), // 令牌值（加密存储）
+  tokenHash: text('token_hash'), // 令牌哈希（用于验证）
+  associatedId: text('associated_id'), // 关联的ID（用户ID、订单ID等）
+  associatedType: text('associated_type'), // 关联类型（user, order, admin）
+  purpose: text('purpose'), // 令牌用途
+  permissions: text('permissions'), // 权限列表（JSON格式）
+  metadata: text('metadata'), // 元数据（JSON格式）
+  isActive: integer('is_active', { mode: 'boolean' }).default(true),
+  expiresAt: text('expires_at'), // 过期时间
+  lastUsedAt: text('last_used_at'), // 最后使用时间
+  usageCount: integer('usage_count').default(0), // 使用次数
+  maxUsage: integer('max_usage'), // 最大使用次数
+  ipAddress: text('ip_address'), // 创建时的IP地址
+  userAgent: text('user_agent'), // 创建时的用户代理
+  revokedAt: text('revoked_at'), // 撤销时间
+  revokedBy: text('revoked_by'), // 撤销者
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  createdBy: text('created_by'), // 创建者
+}, (table) => ({
+  // 优化令牌查询的索引
+  tokenIdIndex: uniqueIndex('idx_security_token_id').on(table.tokenId),
+  tokenTypeIndex: uniqueIndex('idx_security_token_type').on(table.tokenType),
+  associatedIdIndex: uniqueIndex('idx_security_associated_id').on(table.associatedId),
+  expiresAtIndex: uniqueIndex('idx_security_expires_at').on(table.expiresAt),
+}))
+
 // Types - TypeScript 类型定义
 export type Product = typeof products.$inferSelect
 export type NewProduct = typeof products.$inferInsert
@@ -174,6 +279,14 @@ export type AdminLog = typeof adminLogs.$inferSelect
 export type NewAdminLog = typeof adminLogs.$inferInsert
 export type File = typeof files.$inferSelect
 export type NewFile = typeof files.$inferInsert
+export type Config = typeof config.$inferSelect
+export type NewConfig = typeof config.$inferInsert
+export type AuditLog = typeof auditLogs.$inferSelect
+export type NewAuditLog = typeof auditLogs.$inferInsert
+export type RateLimit = typeof rateLimits.$inferSelect
+export type NewRateLimit = typeof rateLimits.$inferInsert
+export type SecurityToken = typeof securityTokens.$inferSelect
+export type NewSecurityToken = typeof securityTokens.$inferInsert
 
 // 枚举类型定义
 export const DeliveryType = {
@@ -237,4 +350,64 @@ export const DeliveryMethod = {
   EMAIL: 'email',
   API: 'api',
   MANUAL: 'manual',
+} as const
+
+// Security related enums
+export const ConfigGroup = {
+  PAYMENT: 'payment',
+  SECURITY: 'security',
+  EMAIL: 'email',
+  DOWNLOAD: 'download',
+  SYSTEM: 'system',
+} as const
+
+export const ConfigDataType = {
+  STRING: 'string',
+  NUMBER: 'number',
+  BOOLEAN: 'boolean',
+  JSON: 'json',
+} as const
+
+export const AuditEventType = {
+  SECURITY: 'security',
+  ADMIN: 'admin',
+  PAYMENT: 'payment',
+  WEBHOOK: 'webhook',
+  DOWNLOAD: 'download',
+} as const
+
+export const AuditEventCategory = {
+  AUTH: 'auth',
+  ACCESS: 'access',
+  VALIDATION: 'validation',
+  ERROR: 'error',
+  SUSPICIOUS: 'suspicious',
+} as const
+
+export const AuditSeverity = {
+  INFO: 'info',
+  WARNING: 'warning',
+  ERROR: 'error',
+  CRITICAL: 'critical',
+} as const
+
+export const RateLimitType = {
+  IP: 'ip',
+  USER: 'user',
+  API_KEY: 'api_key',
+  GLOBAL: 'global',
+} as const
+
+export const TokenType = {
+  JWT: 'jwt',
+  DOWNLOAD: 'download',
+  API_KEY: 'api_key',
+  RESET: 'reset',
+  VERIFICATION: 'verification',
+} as const
+
+export const AssociatedType = {
+  USER: 'user',
+  ORDER: 'order',
+  ADMIN: 'admin',
 } as const

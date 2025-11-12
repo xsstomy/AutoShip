@@ -1,0 +1,108 @@
+# security Specification
+
+## Purpose
+TBD - created by archiving change implement-security-configuration. Update Purpose after archive.
+## Requirements
+### Requirement: Webhook签名验证
+系统 SHALL 验证所有支付网关回调的签名真实性，防止未授权的支付状态更新。
+
+#### Scenario: 支付宝RSA2签名验证
+- **WHEN** 支付宝发送支付回调
+- **THEN** 系统必须使用公钥验证RSA2签名
+- **AND** 签名验证失败时拒绝处理该回调
+- **AND** 记录签名验证失败的安全事件
+
+#### Scenario: Creem HMAC签名验证
+- **WHEN** Creem发送支付回调
+- **THEN** 系统必须使用密钥验证HMAC签名
+- **AND** 签名不匹配时拒绝处理该回调
+- **AND** 记录签名验证失败的安全事件
+
+#### Scenario: 签名验证错误处理
+- **WHEN** Webhook签名验证失败
+- **THEN** 返回HTTP 401状态码
+- **AND** 不泄露具体错误信息给调用方
+- **AND** 在安全日志中记录详细错误信息
+
+### Requirement: 防重放攻击
+系统 SHALL 防止支付回调的重复处理，确保每个支付操作只处理一次。
+
+#### Scenario: 支付回调幂等性
+- **WHEN** 接收到相同gateway_order_id的重复回调
+- **THEN** 系统必须拒绝重复处理
+- **AND** 返回幂等性处理结果
+- **AND** 记录重放攻击尝试
+
+#### Scenario: 时间窗口验证
+- **WHEN** Webhook请求时间戳超出配置的时间窗口
+- **THEN** 系统必须拒绝该请求
+- **AND** 记录潜在的重放攻击
+- **AND** 返回安全警告响应
+
+### Requirement: 下载链接安全管理
+系统 SHALL 为数字商品提供安全的下载链接，防止未授权访问和资源泄露。
+
+#### Scenario: 下载链接生成
+- **WHEN** 订单支付成功需要生成下载链接
+- **THEN** 系统必须生成加密的JWT令牌
+- **AND** 令牌包含过期时间和下载次数限制
+- **AND** 令牌使用强密钥签名
+
+#### Scenario: 下载链接验证
+- **WHEN** 用户使用下载链接访问资源
+- **THEN** 系统必须验证JWT令牌的有效性
+- **AND** 检查下载链接是否过期
+- **AND** 验证下载次数是否超过限制
+- **AND** 记录访问日志和安全事件
+
+#### Scenario: 下载次数限制
+- **WHEN** 用户达到最大下载次数
+- **THEN** 系统必须拒绝后续下载请求
+- **AND** 返回友好的提示信息
+- **AND** 记录访问尝试到安全日志
+
+### Requirement: API访问控制
+系统 SHALL 实施严格的API访问控制，保护敏感的管理功能。
+
+#### Scenario: 管理员API认证
+- **WHEN** 访问管理员API端点
+- **THEN** 系统必须验证有效的管理员密钥
+- **AND** 检查请求来源IP地址
+- **AND** 实施API调用频率限制
+
+#### Scenario: API权限验证
+- **WHEN** 管理员尝试执行敏感操作
+- **THEN** 系统必须验证操作权限
+- **AND** 检查操作的合法性
+- **AND** 记录管理员操作到审计日志
+
+### Requirement: 安全审计日志
+系统 SHALL 记录所有安全相关的事件，支持安全监控和事后追溯。
+
+#### Scenario: 安全事件记录
+- **WHEN** 发生任何安全相关事件
+- **THEN** 系统必须记录详细的事件信息
+- **AND** 包括时间戳、IP地址、用户代理
+- **AND** 保存事件类型和严重程度
+
+#### Scenario: 异常行为检测
+- **WHEN** 检测到异常的访问模式
+- **THEN** 系统必须标记潜在的安全威胁
+- **AND** 增加监控告警级别
+- **AND** 可选择性地阻止可疑请求
+
+### Requirement: 数据加密保护
+系统 SHALL 对敏感数据进行加密保护，防止数据泄露。
+
+#### Scenario: 敏感数据加密
+- **WHEN** 存储敏感的配置信息
+- **THEN** 系统必须使用AES-256-GCM加密
+- **AND** 加密密钥与数据分离存储
+- **AND** 实施密钥轮换机制
+
+#### Scenario: 通信安全
+- **WHEN** 处理敏感API请求
+- **THEN** 系统必须强制使用HTTPS
+- **AND** 实施严格的CORS策略
+- **AND** 使用安全的HTTP头部配置
+
