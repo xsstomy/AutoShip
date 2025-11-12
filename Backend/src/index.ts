@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import { serve } from '@hono/node-server'
-import { cors } from 'hono/middleware/cors'
+import { cors } from 'hono/cors'
+import checkoutRoutes from './routes/checkout'
+import { initDatabase } from './db'
 
 const app = new Hono()
 
@@ -15,12 +17,18 @@ app.use('/api/*', cors({
 app.get('/', (c) => c.text('AutoShip API is running'))
 app.get('/api/health', (c) => c.json({ status: 'ok' }))
 
-// TODO: Add routes
-// - /api/checkout - Create order
+// API routes
+app.route('/api/v1/checkout', checkoutRoutes)
+
+// TODO: Add more routes
 // - /api/webhooks/alipay - Alipay webhook
 // - /api/webhooks/creem - Creem webhook
-// - /api/orders/:id - Get order details
+// - /api/v1/orders/:id - Get order details
 // - /api/admin/* - Admin routes
+
+// Initialize database
+console.log('Initializing database...')
+initDatabase()
 
 console.log('Server starting on port 3000...')
 
