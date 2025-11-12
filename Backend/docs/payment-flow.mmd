@@ -1,0 +1,182 @@
+# 支付流程图
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant C as 前端应用
+    participant B as 后端API
+    participant D as 数据库
+    participant G as 支付网关
+    participant W as Webhook
+
+    Note over U,W: 1. 创建订单和支付
+
+    U->>C: 选择商品，点击购买
+    C->>B: POST /api/v1/checkout/create
+    B->>D: 创建订单记录 (pending)
+    B->>B: 调用PaymentService
+    B->>B: 验证支付网关配置
+    B->>G: 创建支付请求
+    G-->>B: 返回支付URL
+    B->>D: 更新订单(gatewayOrderId)
+    B-->>C: 返回订单信息+支付URL
+    C-->>U: 显示支付链接
+
+    Note over U,W: 2. 用户完成支付
+
+    U->>G: 访问支付URL
+    G->>U: 显示支付页面
+    U->>G: 输入支付信息并确认
+    G->>U: 支付成功页面
+
+    Note over U,W: 3. Webhook回调
+
+    G->>W: POST /webhooks/alipay
+    W->>B: 验证签名(RSA2)
+    B->>B: 检查幂等性
+    B->>D: 查询订单信息
+    B->>B: 验证金额和状态
+    B->>D: 更新订单状态(paid)
+    B->>D: 记录payments_raw
+    B->>B: 记录审计日志
+    B-->>G: 返回success
+
+    Note over U,W: 4. 后续流程
+
+    B->>B: 触发自动发货
+    B->>B: 发送邮件通知
+    B->>D: 更新订单状态(delivered)
+
+    Note over U,W: 5. 用户查询状态
+
+    U->>C: 查询支付状态
+    C->>B: GET /api/v1/payments/{orderId}/status
+    B->>D: 查询订单
+    B-->>C: 返回订单状态
+    C-->>U: 显示支付成功
+```
+
+## 支付状态说明
+
+### 状态流转
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending : 创建订单
+    pending --> paid : 支付成功
+    pending --> failed : 支付失败
+    pending --> cancelled : 订单取消
+    paid --> delivered : 自动发货
+    paid --> refunded : 手动退款
+    delivered --> [*] : 完成
+    failed --> [*] : 结束
+    cancelled --> [*] : 结束
+    refunded --> [*] : 结束
+```
+
+## 数据流图
+
+```mermaid
+graph LR
+    A[用户下单] --> B[创建订单]
+    B --> C[生成支付链接]
+    C --> D[用户支付]
+    D --> E[Webhook回调]
+    E --> F[验证签名]
+    F --> G[检查幂等性]
+    G --> H[更新订单状态]
+    H --> I[记录支付日志]
+    I --> J[触发发货]
+    J --> K[发送邮件]
+    K --> L[完成]
+
+    subgraph "数据存储"
+        M[(订单表)]
+        N[(支付日志表)]
+        O[(审计日志表)]
+    end
+
+    B -.-> M
+    H -.-> M
+    I -.-> N
+    F -.-> O
+    G -.-> O
+```
+
+## 安全检查点
+
+```mermaid
+graph TD
+    A[接收Webhook] --> B{签名验证}
+    B -->|失败| C[返回403]
+    B -->|成功| D[解析参数]
+    D --> E{订单存在?}
+    E -->|否| F[返回错误]
+    E -->|是| G{金额匹配?}
+    G -->|否| H[记录告警]
+    G -->|是| I{重复支付?}
+    I -->|是| J[返回成功]
+    I -->|否| K[更新订单]
+    K --> L[记录日志]
+```
+
+## 错误处理流程
+
+```mermaid
+graph TD
+    A[创建支付] --> B{网关可用?}
+    B -->|否| C[返回错误]
+    B -->|是| D[生成支付URL]
+    D --> E{URL生成成功?}
+    E -->|否| F[记录错误]
+    E -->|是| G[返回支付链接]
+
+    H[接收Webhook] --> I{签名有效?}
+    I -->|否| J[返回403]
+    I -->|是| K{订单有效?}
+    K -->|否| L[返回400]
+    K -->|是| M{已处理?}
+    M -->|是| N[返回200]
+    M -->|否| O[更新订单]
+    O --> P[记录日志]
+```
+
+## 监控指标
+
+### 关键指标
+
+1. **支付成功率**
+   - 公式: 成功支付数 / 总支付数
+   - 目标: > 95%
+
+2. **Webhook处理延迟**
+   - 统计: P50, P95, P99
+   - 目标: < 500ms
+
+3. **签名验证失败率**
+   - 监控频率: 实时
+   - 告警阈值: > 1%
+
+4. **重复支付检测数**
+   - 频率: 应为0
+   - 异常: 频繁触发需调查
+
+5. **各支付网关使用分布**
+   - 统计维度: 日/周/月
+   - 用于优化网关配置
+
+### 日志分级
+
+- **INFO**: 正常支付流程
+- **WARN**: 重试、配置缺失
+- **ERROR**: 签名失败、验证错误
+- **FATAL**: 配置错误、系统异常
+
+### 审计事件
+
+- `payment_initiated`: 支付开始
+- `payment_succeeded`: 支付成功
+- `payment_failed`: 支付失败
+- `webhook_received`: 收到回调
+- `signature_verification_failed`: 签名验证失败
+- `payment_callback_duplicate`: 重复回调

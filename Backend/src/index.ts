@@ -3,6 +3,7 @@ import { serve } from '@hono/node-server'
 import { cors } from 'hono/cors'
 import checkoutRoutes from './routes/checkout'
 import orderRoutes from './routes/orders'
+import webhookRoutes from './routes/webhooks'
 import { initDatabase } from './db'
 
 const app = new Hono()
@@ -22,9 +23,10 @@ app.get('/api/health', (c) => c.json({ status: 'ok' }))
 app.route('/api/v1/checkout', checkoutRoutes)
 app.route('/api/v1/orders', orderRoutes)
 
+// Webhook routes (without /api prefix for third-party integrations)
+app.route('/webhooks', webhookRoutes)
+
 // TODO: Add more routes
-// - /api/webhooks/alipay - Alipay webhook
-// - /api/webhooks/creem - Creem webhook
 // - /api/admin/* - Admin routes
 
 // Initialize database
