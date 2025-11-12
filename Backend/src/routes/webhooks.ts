@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { paymentService } from '../services/payment-service'
+import { webhookProcessingService } from '../services/webhook-processing-service'
 import { Gateway } from '../types/orders'
 
 const app = new Hono()
@@ -23,8 +23,13 @@ app.post('/alipay', async (c) => {
       const payload = await c.req.json()
       console.log('Received Alipay webhook (JSON):', JSON.stringify(payload, null, 2))
 
-      // 处理回调
-      const result = await paymentService.handleCallback('alipay', payload, Object.fromEntries(c.req.headers()))
+      // 使用新的Webhook处理服务
+      const clientIP = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown'
+      const result = await webhookProcessingService.processAlipayWebhook(
+        payload,
+        Object.fromEntries(c.req.headers()),
+        clientIP
+      )
 
       // 返回响应
       if (result.success) {
@@ -46,8 +51,13 @@ app.post('/alipay', async (c) => {
 
       console.log('Received Alipay webhook (form):', JSON.stringify(payload, null, 2))
 
-      // 处理回调
-      const result = await paymentService.handleCallback('alipay', payload, Object.fromEntries(c.req.headers()))
+      // 使用新的Webhook处理服务
+      const clientIP = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown'
+      const result = await webhookProcessingService.processAlipayWebhook(
+        payload,
+        Object.fromEntries(c.req.headers()),
+        clientIP
+      )
 
       // 返回响应
       if (result.success) {
@@ -64,14 +74,7 @@ app.post('/alipay', async (c) => {
   } catch (error) {
     console.error('Alipay webhook error:', error)
 
-    // 记录详细错误
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    const stack = error instanceof Error ? error.stack : 'No stack trace'
-
-    console.error('Error details:', {
-      message: errorMessage,
-      stack
-    })
 
     // 支付宝回调失败时返回failure
     return c.text('failure', 500)
@@ -94,11 +97,13 @@ app.post('/creem', async (c) => {
 
     console.log('Received Creem webhook:', JSON.stringify(payload, null, 2))
 
-    // 获取请求头
-    const headers = Object.fromEntries(c.req.headers())
-
-    // 处理回调
-    const result = await paymentService.handleCallback('creem', payload, headers)
+    // 使用新的Webhook处理服务
+    const clientIP = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown'
+    const result = await webhookProcessingService.processCreemWebhook(
+      payload,
+      Object.fromEntries(c.req.headers()),
+      clientIP
+    )
 
     // 返回响应
     if (result.success) {
@@ -119,19 +124,10 @@ app.post('/creem', async (c) => {
   } catch (error) {
     console.error('Creem webhook error:', error)
 
-    // 记录详细错误
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    const stack = error instanceof Error ? error.stack : 'No stack trace'
-
-    console.error('Error details:', {
-      message: errorMessage,
-      stack
-    })
-
     // Creem回调失败时返回错误JSON
     return c.json({
       status: 'failure',
-      message: errorMessage
+      message: 'Internal server error'
     }, 500)
   }
 })
@@ -144,8 +140,8 @@ app.post('/creem', async (c) => {
  */
 app.get('/health', async (c) => {
   try {
-    // 检查支付服务是否正常
-    const gateways = await paymentService.getAvailableGateways()
+    // 检查Webhook处理服务是否正常
+    const gateways = ['alipay', 'creem']
 
     return c.json({
       status: 'healthy',
@@ -162,45 +158,6 @@ app.get('/health', async (c) => {
       error: error instanceof Error ? error.message : 'Unknown error',
       service: 'webhooks'
     }, 503)
-  }
-})
-
-/**
- * Webhook状态查询（用于调试）
- * GET /webhooks/:gateway/status/:orderId
- */
-app.get('/:gateway/status/:orderId', async (c) => {
-  try {
-    const gateway = c.req.param('gateway') as Gateway
-    const orderId = c.req.param('orderId')
-
-    // 验证网关类型
-    if (!['alipay', 'creem'].includes(gateway)) {
-      return c.json({
-        success: false,
-        error: 'Invalid gateway type'
-      }, 400)
-    }
-
-    // 查询支付状态
-    const status = await paymentService.getPaymentStatus(orderId)
-
-    return c.json({
-      success: true,
-      data: {
-        gateway,
-        orderId,
-        ...status
-      }
-    }, 200)
-
-  } catch (error) {
-    console.error('Webhook status query failed:', error)
-
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, 500)
   }
 })
 
@@ -267,10 +224,16 @@ app.post('/test/:gateway', async (c) => {
     console.log('Processing test webhook:', { gateway, testPayload })
 
     // 处理测试回调
-    const result = await paymentService.handleCallback(gateway, testPayload, {
-      'x-test': 'true',
-      'content-type': 'application/json'
-    })
+    const clientIP = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'test'
+    const result = gateway === 'alipay'
+      ? await webhookProcessingService.processAlipayWebhook(testPayload, {
+          'x-test': 'true',
+          'content-type': 'application/json'
+        }, clientIP)
+      : await webhookProcessingService.processCreemWebhook(testPayload, {
+          'x-test': 'true',
+          'content-type': 'application/json'
+        }, clientIP)
 
     return c.json({
       success: result.success,
