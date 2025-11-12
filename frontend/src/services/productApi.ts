@@ -53,7 +53,7 @@ apiClient.interceptors.response.use(
       return Promise.reject(new Error('网络连接失败，请检查网络'));
     }
     const status = error.response?.status ?? 500;
-    const message = error.response?.data?.message || '请求失败';
+    const message = (error.response?.data as any)?.message || '请求失败';
 
     switch (status) {
       case 400:

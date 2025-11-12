@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import type { Product, Currency } from '../../types/product';
 import { getProductById } from '../../services/productApi';
 import { getCurrencyPreference, convertCurrency, formatCurrency } from '../../utils/currency';
+import { buildCheckoutUrl } from '../../services/checkoutApi';
 
 /**
  * 商品详情页面组件
  */
 const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -240,8 +242,13 @@ const ProductDetail: React.FC = () => {
                 disabled={product.stock === 0}
                 onClick={() => {
                   if (product.stock > 0) {
-                    // TODO: 跳转到下单流程页面
-                    alert('即将跳转到下单页面');
+                    const checkoutUrl = buildCheckoutUrl({
+                      productId: product.id,
+                      productName: product.name,
+                      price: convertedPrice,
+                      currency: currency,
+                    });
+                    navigate(checkoutUrl);
                   }
                 }}
               >
