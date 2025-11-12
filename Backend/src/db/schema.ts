@@ -47,7 +47,16 @@ export const orders = sqliteTable('orders', {
   refundedAt: text('refunded_at'), // 退款时间
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
-})
+}, (table) => ({
+  // 优化常用查询的索引
+  emailIndex: uniqueIndex('idx_orders_email').on(table.email),
+  statusIndex: uniqueIndex('idx_orders_status').on(table.status),
+  gatewayIndex: uniqueIndex('idx_orders_gateway').on(table.gateway),
+  gatewayOrderIdIndex: uniqueIndex('idx_orders_gateway_order_id').on(table.gatewayOrderId),
+  createdAtIndex: uniqueIndex('idx_orders_created_at').on(table.createdAt),
+  emailStatusIndex: uniqueIndex('idx_orders_email_status').on(table.email, table.status),
+  statusCreatedAtIndex: uniqueIndex('idx_orders_status_created_at').on(table.status, table.createdAt),
+}))
 
 // Deliveries - 发货记录表
 export const deliveries = sqliteTable('deliveries', {
@@ -94,7 +103,15 @@ export const paymentsRaw = sqliteTable('payments_raw', {
   errorMessage: text('error_message'), // 处理错误信息
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
   processedAt: text('processed_at'), // 处理完成时间
-})
+}, (table) => ({
+  // 优化Webhook查询和幂等性检查的索引
+  gatewayIndex: uniqueIndex('idx_payments_raw_gateway').on(table.gateway),
+  gatewayOrderIdIndex: uniqueIndex('idx_payments_raw_gateway_order_id').on(table.gatewayOrderId),
+  processedIndex: uniqueIndex('idx_payments_raw_processed').on(table.processed),
+  createdAtIndex: uniqueIndex('idx_payments_raw_created_at').on(table.createdAt),
+  gatewayProcessedIndex: uniqueIndex('idx_payments_raw_gateway_processed').on(table.gateway, table.processed),
+  gatewayOrderIdProcessedIndex: uniqueIndex('idx_payments_raw_gateway_order_id_processed').on(table.gatewayOrderId, table.processed),
+}))
 
 // Inventory text - 文本库存表（可用于卡密池）
 export const inventoryText = sqliteTable('inventory_text', {

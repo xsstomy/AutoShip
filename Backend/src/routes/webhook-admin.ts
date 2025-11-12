@@ -1,8 +1,24 @@
 import { Hono } from 'hono'
 import { webhookProcessingService } from '../services/webhook-processing-service'
 import { orderStateService } from '../services/order-state-service'
+import {
+  adminAuth,
+  adminRateLimit,
+  adminRequestLogging,
+  corsSecurity,
+  adminCorsSecurity,
+  allSecurityHeaders
+} from '../middleware'
 
 const app = new Hono()
+
+// 全局安全中间件 - 对所有管理员路由应用
+app.use('*', corsSecurity())
+app.use('*', adminCorsSecurity())
+app.use('*', allSecurityHeaders())
+app.use('*', adminRequestLogging())
+app.use('*', adminRateLimit())
+app.use('*', adminAuth())
 
 /**
  * 获取Webhook统计信息

@@ -297,8 +297,6 @@ export {
   asc,
   like,
   count,
-  db,
-  sqlite,
 }
 
 // 默认导出

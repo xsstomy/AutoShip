@@ -1,8 +1,30 @@
 import { Hono } from 'hono'
 import { webhookProcessingService } from '../services/webhook-processing-service'
 import { Gateway } from '../types/orders'
+import {
+  webhookSignatureValidator,
+  webhookCorsSecurity,
+  webhookRequestLogging,
+  rateLimit,
+  suspiciousPatternDetection,
+  webhookResponseFormatter
+} from '../middleware'
 
 const app = new Hono()
+
+// 全局Webhook安全中间件
+app.use('*', webhookCorsSecurity())
+app.use('*', webhookRequestLogging())
+app.use('*', suspiciousPatternDetection({
+  maxRequestsPerMinute: 10,
+  maxFailedRequests: 5,
+  blockDuration: 5 * 60 * 1000 // 5分钟
+}))
+app.use('*', rateLimit({
+  windowMs: 60 * 1000, // 1分钟
+  maxRequests: 10 // 每分钟最多10个请求
+}))
+app.use('*', webhookSignatureValidator())
 
 /**
  * 支付宝支付回调

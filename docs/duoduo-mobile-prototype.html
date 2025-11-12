@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>多多有货 · 自适应原型</title>
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-image:
+        radial-gradient(35rem 25rem at -10% -10%, #f4fafc 40%, transparent 41%),
+        radial-gradient(30rem 30rem at 110% 10%, #fff7f0 35%, transparent 36%),
+        radial-gradient(40rem 30rem at 50% 120%, #f6f0ff 35%, transparent 36%),
+        linear-gradient(180deg, #f9fbff 0%, #f7f7fb 100%);
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+    }
+    .glass { backdrop-filter: blur(8px); background: rgba(255,255,255,0.74); }
+    .badge { display:inline-flex; align-items:center; border-radius:9999px; padding:2px 8px; font-size:12px; line-height:1; font-weight:500; }
+    @media (max-width: 640px) { .badge { font-size: 11px; } }
+  </style>
+</head>
+<body class="text-gray-800">
+  <!-- 顶部导航 -->
+  <header class="sticky top-0 z-30 glass border-b border-white/60 shadow-sm">
+    <div class="mx-auto max-w-7xl px-3 sm:px-6">
+      <div class="flex h-14 items-center justify-between">
+        <a href="#" class="flex items-center gap-2">
+          <span class="text-2xl">🐼</span>
+          <span class="text-lg sm:text-xl font-semibold tracking-wide">多多有货</span>
+        </a>
+
+        <!-- 右：搜索 + 登录 (桌面) / 菜单按钮(移动) -->
+        <div class="flex items-center gap-2">
+          <div class="hidden sm:flex items-center gap-2">
+            <div class="relative w-64">
+              <input class="w-full rounded-md border border-gray-200 bg-white/80 py-1.5 pl-8 pr-3 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                     placeholder="搜索商品…" />
+              <svg class="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="none">
+                <path d="M21 21l-4.3-4.3M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <button class="rounded-md border border-gray-200 bg-white/80 px-3 py-1.5 text-sm hover:bg-gray-50">登录/注册</button>
+          </div>
+
+          <button id="menuBtn" class="sm:hidden p-2 rounded-md hover:bg-gray-100" aria-label="打开菜单">☰</button>
+        </div>
+      </div>
+
+      <!-- 移动菜单 -->
+      <div id="mobileMenu" class="sm:hidden hidden flex-col gap-2 pb-3">
+        <div class="relative">
+          <input class="w-full rounded-md border border-gray-200 bg-white/80 py-2 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                 placeholder="搜索商品…" />
+          <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="none">
+            <path d="M21 21l-4.3-4.3M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <a class="rounded-md bg-white/80 border border-gray-200 px-3 py-2 text-center text-sm" href="#">主页</a>
+          <a class="rounded-md bg-white/80 border border-gray-200 px-3 py-2 text-center text-sm" href="#">商品分类</a>
+          <a class="rounded-md bg-white/80 border border-gray-200 px-3 py-2 text-center text-sm" href="#">订单查询</a>
+          <a class="rounded-md bg-white/80 border border-gray-200 px-3 py-2 text-center text-sm" href="#">购物车</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-7xl px-3 sm:px-6 py-4 sm:py-6">
+    <!-- 公告 -->
+    <section class="glass rounded-2xl border border-white/60 p-4 sm:p-6 shadow">
+      <div class="mb-3 flex items-center gap-2">
+        <span class="text-base sm:text-lg">📢</span>
+        <h2 class="text-base sm:text-lg font-semibold">公告</h2>
+        <span class="ml-auto text-xs text-gray-400">2025.10.24</span>
+      </div>
+
+      <div class="prose prose-sm sm:prose-base max-w-none">
+        <ul class="list-none space-y-2 marker:text-transparent">
+          <li><span class="bg-gradient-to-r from-pink-500 to-violet-600 bg-clip-text font-semibold text-transparent">昨天 USDT 收款故障，问题已修复。</span> 若涉及已支付订单或充值，统一人工补单。</li>
+          <li><span class="bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded">网站新版改版</span> 1 分钟了解新功能。</li>
+          <li>需要退款或遇到问题？请通过网站右下角在线客服。</li>
+          <li>商品问题需与商家协商，售后期为发货 3 天内。</li>
+          <li>业务合作、渠道互换欢迎随时联系。</li>
+          <li>请先阅读使用教程后再下单。</li>
+        </ul>
+      </div>
+
+      <div class="mt-3 rounded-md bg-red-50 border border-red-100 text-[13px] text-red-700 px-3 py-2">
+        本店所有仅供软件购买后下载或学习，勿作违规用途；超范围使用概不负责！
+      </div>
+    </section>
+
+    <!-- 选择商品标题 -->
+    <div class="mt-6 mb-2 flex flex-wrap items-center justify-between gap-2">
+      <h3 class="text-base sm:text-lg font-semibold">选择商品</h3>
+      <div class="text-xs sm:text-sm text-gray-500">支持：自动发货 / 订单邮件通知</div>
+    </div>
+
+    <!-- 商品网格：手机单列，平板两列 -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+      <!-- 产品卡组件（可复制） -->
+      <article class="group rounded-xl border border-gray-100 bg-white/90 p-3 sm:p-4 shadow-sm hover:shadow-md transition">
+        <div class="flex items-start gap-3 sm:gap-4">
+          <div class="shrink-0 h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 text-lg sm:text-xl">🚀</div>
+          <div class="min-w-0 flex-1">
+            <h4 class="text-sm sm:text-base font-medium text-gray-900 line-clamp-2">
+              成品号｜已购小火箭（Shadowrocket）| Apple ID | 含密保 | 独享
+            </h4>
+            <div class="mt-1 flex flex-wrap gap-1.5">
+              <span class="badge bg-emerald-50 text-emerald-700 border border-emerald-200">自动发货</span>
+              <span class="badge bg-sky-50 text-sky-700 border border-sky-200">库存 175</span>
+              <span class="badge bg-purple-50 text-purple-700 border border-purple-200">销量 19488</span>
+              <span class="badge bg-amber-50 text-amber-700 border border-amber-200">批次价 ¥11.99 起</span>
+            </div>
+            <div class="mt-3 flex items-center justify-between">
+              <div class="text-rose-600 text-base sm:text-lg font-semibold">¥19.99</div>
+              <div class="flex items-center gap-2">
+                <button class="hidden sm:inline-flex rounded-md border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50">详情</button>
+                <button class="rounded-md bg-indigo-600 px-3 py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-indigo-700">立即购买</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="group rounded-xl border border-gray-100 bg-white/90 p-3 sm:p-4 shadow-sm hover:shadow-md transition">
+        <div class="flex items-start gap-3 sm:gap-4">
+          <div class="shrink-0 h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 text-lg sm:text-xl">🪢</div>
+          <div class="min-w-0 flex-1">
+            <h4 class="text-sm sm:text-base font-medium text-gray-900 line-clamp-2">
+              成品号｜已购 Stash | Apple ID | 含密保 | 独享
+            </h4>
+            <div class="mt-1 flex flex-wrap gap-1.5">
+              <span class="badge bg-emerald-50 text-emerald-700 border border-emerald-200">自动发货</span>
+              <span class="badge bg-sky-50 text-sky-700 border border-sky-200">库存 273</span>
+              <span class="badge bg-purple-50 text-purple-700 border border-purple-200">销量 212</span>
+              <span class="badge bg-amber-50 text-amber-700 border border-amber-200">批次价 ¥19 起</span>
+            </div>
+            <div class="mt-3 flex items-center justify-between">
+              <div class="text-rose-600 text-base sm:text-lg font-semibold">¥25</div>
+              <div class="flex items-center gap-2">
+                <button class="hidden sm:inline-flex rounded-md border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50">详情</button>
+                <button class="rounded-md bg-indigo-600 px-3 py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-indigo-700">立即购买</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="group rounded-xl border border-gray-100 bg-white/90 p-3 sm:p-4 shadow-sm hover:shadow-md transition">
+        <div class="flex items-start gap-3 sm:gap-4">
+          <div class="shrink-0 h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-500 text-lg sm:text-xl">🧭</div>
+          <div class="min-w-0 flex-1">
+            <h4 class="text-sm sm:text-base font-medium text-gray-900 line-clamp-2">
+              成品号｜已购圈 X（Quantumult X）| Apple ID | 含密保 | 独享
+            </h4>
+            <div class="mt-1 flex flex-wrap gap-1.5">
+              <span class="badge bg-emerald-50 text-emerald-700 border border-emerald-200">自动发货</span>
+              <span class="badge bg-sky-50 text-sky-700 border border-sky-200">库存 7</span>
+              <span class="badge bg-purple-50 text-purple-700 border border-purple-200">销量 701</span>
+              <span class="badge bg-amber-50 text-amber-700 border border-amber-200">批次价 ¥30 起</span>
+            </div>
+            <div class="mt-3 flex items-center justify-between">
+              <div class="text-rose-600 text-base sm:text-lg font-semibold">¥36</div>
+              <div class="flex items-center gap-2">
+                <button class="hidden sm:inline-flex rounded-md border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50">详情</button>
+                <button class="rounded-md bg-indigo-600 px-3 py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-indigo-700">立即购买</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="group rounded-xl border border-gray-100 bg-white/90 p-3 sm:p-4 shadow-sm hover:shadow-md transition">
+        <div class="flex items-start gap-3 sm:gap-4">
+          <div class="shrink-0 h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-violet-50 flex items-center justify-center text-violet-600 text-lg sm:text-xl">🎈</div>
+          <div class="min-w-0 flex-1">
+            <h4 class="text-sm sm:text-base font-medium text-gray-900 line-clamp-2">
+              成品号｜已购 Loon | Apple ID | 含密保 | 独享
+            </h4>
+            <div class="mt-1 flex flex-wrap gap-1.5">
+              <span class="badge bg-emerald-50 text-emerald-700 border border-emerald-200">自动发货</span>
+              <span class="badge bg-sky-50 text-sky-700 border border-sky-200">库存 12</span>
+              <span class="badge bg-purple-50 text-purple-700 border border-purple-200">销量 445</span>
+              <span class="badge bg-amber-50 text-amber-700 border border-amber-200">批次价 ¥28.5 起</span>
+            </div>
+            <div class="mt-3 flex items-center justify-between">
+              <div class="text-rose-600 text-base sm:text-lg font-semibold">¥35</div>
+              <div class="flex items-center gap-2">
+                <button class="hidden sm:inline-flex rounded-md border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50">详情</button>
+                <button class="rounded-md bg-indigo-600 px-3 py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-indigo-700">立即购买</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <p class="mt-6 text-center text-xs text-gray-500">
+      * 本页为移动端适配原型：按钮未绑定真实接口。可直接迁移为 React 组件。
+    </p>
+  </main>
+
+  <script>
+    const btn = document.getElementById('menuBtn');
+    const menu = document.getElementById('mobileMenu');
+    btn?.addEventListener('click', () => {
+      menu.classList.toggle('hidden');
+    });
+  </script>
+</body>
+</html>
