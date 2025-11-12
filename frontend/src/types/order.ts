@@ -87,3 +87,57 @@ export interface ProductQueryParams {
   price: string;            // 价格（字符串格式）
   currency: Currency;       // 货币类型
 }
+
+/**
+ * 发货内容类型
+ */
+export type DeliveryType = 'text' | 'download';
+
+/**
+ * 发货内容接口
+ */
+export interface DeliveryContent {
+  type: DeliveryType;       // 发货类型
+  content?: string;         // 文本内容（激活码、许可证等）
+  fileName?: string;        // 文件名
+  fileSize?: number;        // 文件大小（字节）
+  downloadUrl?: string;     // 下载链接
+}
+
+/**
+ * 订单详情接口（扩展基础订单）
+ */
+export interface OrderDetail extends Order {
+  productName: string;      // 商品名称
+  delivery?: DeliveryContent; // 发货内容
+}
+
+/**
+ * 下载信息接口
+ */
+export interface DownloadInfo {
+  token: string;            // 下载token
+  url: string;              // 下载URL
+  expiresAt: string;        // 过期时间
+  downloadCount: number;    // 已下载次数
+  maxDownloads: number;     // 最大下载次数
+}
+
+/**
+ * 订单详情页状态接口
+ */
+export interface OrderDetailPageState {
+  loading: boolean;         // 加载状态
+  error: string | null;     // 错误信息
+  order: OrderDetail | null; // 订单详情
+}
+
+/**
+ * 订单状态配置接口
+ */
+export interface OrderStatusConfig {
+  label: string;            // 状态标签
+  color: string;            // 状态颜色
+  icon: string;             // 状态图标
+  description: string;      // 状态描述
+}

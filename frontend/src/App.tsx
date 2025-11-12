@@ -3,6 +3,7 @@ import ProductDisplay from './components/ProductDisplay/ProductDisplay';
 import ProductDetail from './components/ProductDisplay/ProductDetail';
 import CheckoutPage from './components/Checkout/CheckoutPage';
 import PaymentPage from './components/Payment/PaymentPage';
+import { OrderDetailPage } from './pages/OrderDetailPage';
 
 /**
  * 主应用组件
@@ -20,6 +21,8 @@ function App() {
         {/* 支付页面 */}
         <Route path="/payment/:orderId" element={<PaymentPage />} />
         <Route path="/payment" element={<PaymentPage />} />
+        {/* 订单详情页 */}
+        <Route path="/orders/:orderId" element={<OrderDetailPage />} />
       </Routes>
     </Router>
   );
