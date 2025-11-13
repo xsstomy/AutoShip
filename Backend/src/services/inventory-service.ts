@@ -24,11 +24,12 @@ export class InventoryService {
   async addInventoryBatch(productId: number, contents: string[], options: any = {}) {
     const { batchName, createdBy, priority = 0, expiresAt } = options
 
-    return await withTransaction(async () => {
-      const items = []
+    // 使用 better-sqlite3 的事务，但同步执行
+    const items = db.transaction(() => {
+      const result = []
 
       for (const content of contents) {
-        const item = await db.insert(schema.inventoryText)
+        const item = db.insert(schema.inventoryText)
           .values({
             productId,
             content: content.trim(),
@@ -39,11 +40,13 @@ export class InventoryService {
           })
           .returning()
 
-        items.push(item[0])
+        result.push(item[0])
       }
 
-      return items
+      return result
     })
+
+    return items
   }
 
   /**

@@ -5,6 +5,7 @@ import { inventoryService } from '../services/inventory-service'
 import { adminAuth } from '../middleware/admin-jwt-auth'
 import { getClientIP, sanitizeForLog } from '../utils/auth'
 import { AdminEventType, AdminEventCategory } from '../db/schema'
+import { validateProduct, validateProductPrice } from '../db/validation'
 
 const app = new Hono()
 
@@ -18,6 +19,103 @@ const updatePriceSchema = z.object({
   })),
 })
 
+// 商品状态更新验证模式
+const updateProductStatusSchema = z.object({
+  isActive: z.boolean(),
+})
+
+// 批量状态更新验证模式
+const batchUpdateStatusSchema = z.object({
+  productIds: z.array(z.number().int().positive()).min(1, '至少需要选择一个商品'),
+  isActive: z.boolean(),
+})
+
+// 商品创建验证模式（包含价格）
+const createProductWithPricesSchema = z.object({
+  name: z.string().min(1, '商品名称不能为空').max(255, '商品名称过长'),
+  description: z.string().max(2000, '描述过长').optional(),
+  deliveryType: z.enum(['text', 'download', 'hybrid']),
+  templateText: z.string().optional(),
+  prices: z.array(z.object({
+    currency: z.string().min(1, '货币不能为空'),
+    price: z.number().positive('价格必须大于0'),
+    isActive: z.boolean().optional(),
+  })).min(1, '至少需要设置一个价格'),
+})
+
+
+/**
+ * 创建新商品
+ */
+app.post('/products', adminAuth, async (c) => {
+  const admin = c.get('admin')
+  const clientIP = getClientIP(c.req)
+
+  try {
+    const body = await c.req.json()
+    const validatedData = createProductWithPricesSchema.parse(body)
+
+    // 创建商品基本信息
+    const productData = {
+      name: validatedData.name,
+      description: validatedData.description || '',
+      deliveryType: validatedData.deliveryType,
+      templateText: validatedData.templateText || '',
+      isActive: true,
+      sortOrder: 0,
+    }
+
+    // 创建商品
+    const newProduct = await productService.createProduct(productData)
+
+    // 设置商品价格
+    const pricePromises = validatedData.prices.map(async (priceData) => {
+      return productService.addProductPrice(newProduct.id, {
+        currency: priceData.currency,
+        price: priceData.price,
+        isActive: priceData.isActive !== false,
+      })
+    })
+
+    await Promise.all(pricePromises)
+
+    // 记录管理员操作日志
+    console.log(`管理员 ${admin.username} 在 ${clientIP} 创建了新商品: ${newProduct.name}`, {
+      eventType: AdminEventType.PRODUCT_CREATE,
+      eventCategory: AdminEventCategory.PRODUCT_MANAGEMENT,
+      details: {
+        productId: newProduct.id,
+        productName: newProduct.name,
+        deliveryType: newProduct.deliveryType,
+        currencies: validatedData.prices.map(p => p.currency),
+      },
+    })
+
+    // 获取创建后的完整商品信息
+    const productWithPrices = await productService.getProductWithPrices(newProduct.id)
+
+    return c.json({
+      success: true,
+      message: '商品创建成功',
+      data: productWithPrices,
+    })
+  } catch (error) {
+    console.error('创建商品失败:', error)
+
+    if (error instanceof z.ZodError) {
+      return c.json({
+        success: false,
+        error: '输入数据无效',
+        details: error.errors,
+      }, 400)
+    }
+
+    return c.json({
+      success: false,
+      error: '创建商品失败',
+    }, 500)
+  }
+})
 
 /**
  * 获取商品列表（包含价格和库存信息）
@@ -288,6 +386,173 @@ app.get('/inventory/low-stock', adminAuth, async (c) => {
     return c.json({
       success: false,
       error: '获取库存预警失败',
+    }, 500)
+  }
+})
+
+/**
+ * 更新商品状态
+ */
+app.patch('/products/:id/status', adminAuth, async (c) => {
+  const admin = c.get('admin')
+  const clientIP = getClientIP(c.req)
+
+  try {
+    const productId = parseInt(c.req.param('id'))
+    const body = await c.req.json()
+    const { isActive } = updateProductStatusSchema.parse(body)
+
+    if (isNaN(productId)) {
+      return c.json({ error: '无效的商品ID' }, 400)
+    }
+
+    // 验证商品是否存在
+    const product = await productService.getProductById(productId)
+    if (!product) {
+      return c.json({ error: '商品不存在' }, 404)
+    }
+
+    // 更新商品状态
+    const updatedProduct = await productService.updateProduct(productId, {
+      isActive,
+      updatedAt: new Date(),
+    })
+
+    // 记录管理员操作日志
+    const action = isActive ? '上架' : '下架'
+    console.log(`管理员 ${admin.username} 在 ${clientIP} 将商品 ${product.name} ${action}`, {
+      eventType: AdminEventType.PRODUCT_UPDATE,
+      eventCategory: AdminEventCategory.PRODUCT_MANAGEMENT,
+      details: {
+        productId,
+        productName: product.name,
+        action,
+        newStatus: isActive,
+      },
+    })
+
+    return c.json({
+      success: true,
+      message: `商品${action}成功`,
+      data: {
+        productId,
+        isActive,
+        productName: product.name,
+      },
+    })
+  } catch (error) {
+    console.error('更新商品状态失败:', error)
+
+    if (error instanceof z.ZodError) {
+      return c.json({
+        success: false,
+        error: '输入数据无效',
+        details: error.errors,
+      }, 400)
+    }
+
+    return c.json({
+      success: false,
+      error: '更新商品状态失败',
+    }, 500)
+  }
+})
+
+/**
+ * 批量更新商品状态
+ */
+app.post('/products/batch-status', adminAuth, async (c) => {
+  const admin = c.get('admin')
+  const clientIP = getClientIP(c.req)
+
+  try {
+    const body = await c.req.json()
+    const { productIds, isActive } = batchUpdateStatusSchema.parse(body)
+
+    // 验证所有商品是否存在
+    const products = await Promise.all(
+      productIds.map(async (id) => {
+        const product = await productService.getProductById(id)
+        return product ? { id, name: product.name } : null
+      })
+    )
+
+    const invalidProducts = products.filter(p => p === null)
+    if (invalidProducts.length > 0) {
+      return c.json({
+        success: false,
+        error: '部分商品不存在',
+        details: {
+          invalidIds: productIds.filter((_, index) => products[index] === null)
+        }
+      }, 400)
+    }
+
+    // 批量更新商品状态
+    const updatePromises = productIds.map(async (productId) => {
+      return productService.updateProduct(productId, {
+        isActive,
+        updatedAt: new Date(),
+      })
+    })
+
+    const results = await Promise.allSettled(updatePromises)
+
+    // 统计成功和失败的数量
+    const successful = results.filter(r => r.status === 'fulfilled').length
+    const failed = results.filter(r => r.status === 'rejected').length
+
+    // 记录管理员操作日志
+    const action = isActive ? '批量上架' : '批量下架'
+    const productNames = products.filter(p => p !== null).map(p => p!.name)
+    console.log(`管理员 ${admin.username} 在 ${clientIP} ${action}了 ${successful} 个商品: ${productNames.join(', ')}`, {
+      eventType: AdminEventType.PRODUCT_UPDATE,
+      eventCategory: AdminEventCategory.PRODUCT_MANAGEMENT,
+      details: {
+        productIds,
+        action,
+        newStatus: isActive,
+        successful,
+        failed,
+      },
+    })
+
+    if (failed === 0) {
+      return c.json({
+        success: true,
+        message: `${action}成功`,
+        data: {
+          total: productIds.length,
+          successful,
+          failed,
+          productNames,
+        },
+      })
+    } else {
+      return c.json({
+        success: false,
+        message: `${action}部分成功`,
+        data: {
+          total: productIds.length,
+          successful,
+          failed,
+        },
+      }, 207) // 207 Multi-Status
+    }
+  } catch (error) {
+    console.error('批量更新商品状态失败:', error)
+
+    if (error instanceof z.ZodError) {
+      return c.json({
+        success: false,
+        error: '输入数据无效',
+        details: error.errors,
+      }, 400)
+    }
+
+    return c.json({
+      success: false,
+      error: '批量更新商品状态失败',
     }, 500)
   }
 })
