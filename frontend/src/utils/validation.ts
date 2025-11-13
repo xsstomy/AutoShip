@@ -192,7 +192,7 @@ export function validatePaymentGateway(gateway: string): ValidationResult {
     };
   }
 
-  const validGateways = ['alipay', 'creem'];
+  const validGateways = ['alipay'];
   if (!validGateways.includes(gateway.toLowerCase())) {
     return {
       isValid: false,
@@ -235,7 +235,6 @@ export function validateUrl(url: string): ValidationResult {
     const allowedDomains = [
       'alipay.com',
       'alipayplus.com',
-      'creem.io',
       // 可以根据实际需要添加更多域名
     ];
 

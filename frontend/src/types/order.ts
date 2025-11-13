@@ -8,7 +8,7 @@ export type OrderStatus = 'pending' | 'paid' | 'delivered' | 'cancelled' | 'refu
 /**
  * 支付网关类型
  */
-export type PaymentGateway = 'alipay' | 'creem' | 'paypal';
+export type PaymentGateway = 'alipay' | 'paypal';
 
 /**
  * 订单创建请求接口

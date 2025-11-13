@@ -5,7 +5,7 @@
 /**
  * 支付网关类型
  */
-export type PaymentGateway = 'alipay' | 'creem';
+export type PaymentGateway = 'alipay';
 
 /**
  * 订单状态
@@ -28,6 +28,7 @@ export interface OrderInfo {
   price: number;
   currency: string;
   status: OrderStatus;
+  gateway: string;
   createdAt: string;
   updatedAt: string;
 }

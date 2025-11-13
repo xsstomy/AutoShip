@@ -570,7 +570,7 @@ export class ConfigService {
 
       const total = stats[0].total
       const encrypted = stats[0].encrypted
-      const public = stats[0].public
+      const publicCount = stats[0].public
 
       // 按分组统计
       const groupStats = await db.select({
@@ -602,7 +602,7 @@ export class ConfigService {
       return {
         totalConfigs: total,
         encryptedConfigs: encrypted,
-        publicConfigs: public,
+        publicConfigs: publicCount,
         byGroup,
         byDataType
       }

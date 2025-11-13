@@ -99,7 +99,14 @@ const PaymentSummary: React.FC<PaymentSummaryProps> = ({
           <div className="flex justify-between items-center">
             <span className="text-gray-600 text-sm">创建时间：</span>
             <span className="text-gray-900 text-sm ml-2">
-              {new Date(orderInfo.createdAt).toLocaleString('zh-CN')}
+              {(() => {
+                try {
+                  const date = new Date(orderInfo.createdAt);
+                  return isNaN(date.getTime()) ? '加载中...' : date.toLocaleString('zh-CN');
+                } catch (e) {
+                  return '加载中...';
+                }
+              })()}
             </span>
           </div>
 
@@ -117,7 +124,9 @@ const PaymentSummary: React.FC<PaymentSummaryProps> = ({
             <span className="text-lg font-semibold text-gray-900">支付金额：</span>
             <div className="text-right">
               <span className="text-2xl font-bold text-blue-600">
-                {formatCurrency(orderInfo.price, orderInfo.currency)}
+                {orderInfo.price !== undefined && orderInfo.price !== null
+                  ? formatCurrency(orderInfo.price, orderInfo.currency)
+                  : '加载中...'}
               </span>
               <div className="text-xs text-gray-500 mt-1">
                 {orderInfo.currency === 'CNY' ? '人民币' : '美元'}

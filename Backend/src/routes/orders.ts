@@ -62,9 +62,10 @@ app.post('/create', zValidator('json', createOrderSchema), async (c) => {
       success: true,
       data: {
         id: order.id,
-        email: order.email,
+        productId: order.productId,
         productName: data.productName,
-        price: order.amount.toString(),
+        email: order.email,
+        price: order.amount,
         currency: order.currency,
         status: order.status,
         createdAt: order.createdAt,
@@ -138,9 +139,9 @@ app.get('/:id', async (c) => {
       }, 400)
     }
 
-    const order = await orderService.getOrderById(orderId)
+    const orderWithDetails = await orderService.getOrderWithDetails(orderId)
 
-    if (!order) {
+    if (!orderWithDetails || !orderWithDetails.order) {
       return c.json({
         success: false,
         error: {
@@ -150,9 +151,22 @@ app.get('/:id', async (c) => {
       }, 404)
     }
 
+    const { order, product } = orderWithDetails
+
+    // 转换数据库字段为前端期望的字段名
     return c.json({
       success: true,
-      data: order
+      data: {
+        id: order.id,
+        productId: order.productId,
+        productName: product?.name || '数字商品',
+        email: order.email,
+        price: order.amount,
+        currency: order.currency,
+        status: order.status,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      }
     })
 
   } catch (error) {

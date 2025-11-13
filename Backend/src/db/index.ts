@@ -28,15 +28,407 @@ export async function initializeDatabase() {
     // 启用外键约束
     sqlite.pragma('foreign_keys = ON')
 
-    // 创建表（如果不存在）
-    // 注意：在实际部署中，应该使用迁移脚本
-    console.log('📋 Database initialized successfully')
+    // 检查并创建所有表
+    await ensureTablesExist()
+
+    console.log('✅ Database initialized successfully')
 
     return true
   } catch (error) {
     console.error('❌ Failed to initialize database:', error)
-    return false
+    throw error
   }
+}
+
+// 确保所有必要的表存在
+async function ensureTablesExist() {
+  console.log('📋 Checking database tables...')
+
+  // 检查 products 表是否存在
+  const tablesExist = await checkTablesExist()
+
+  if (!tablesExist.allTablesExist) {
+    console.log('📦 Creating missing tables...')
+    await createAllTables()
+    console.log('✅ All tables created successfully')
+  } else {
+    console.log('✅ All tables already exist')
+  }
+}
+
+// 检查表是否存在
+async function checkTablesExist(): Promise<{ allTablesExist: boolean; missingTables: string[] }> {
+  const requiredTables = [
+    'products',
+    'product_prices',
+    'orders',
+    'deliveries',
+    'downloads',
+    'payments_raw',
+    'inventory_text',
+    'settings',
+    'admin_logs',
+    'files',
+    'config',
+    'audit_logs',
+    'rate_limits',
+    'security_tokens'
+  ]
+
+  const missingTables: string[] = []
+
+  for (const tableName of requiredTables) {
+    try {
+      sqlite.prepare(`SELECT 1 FROM ${tableName} LIMIT 1`).get()
+    } catch (error: any) {
+      if (error.code === 'SQLITE_ERROR' && error.message.includes('no such table')) {
+        missingTables.push(tableName)
+      }
+    }
+  }
+
+  return {
+    allTablesExist: missingTables.length === 0,
+    missingTables
+  }
+}
+
+// 创建所有表
+async function createAllTables() {
+  // 根据 schema.ts 中的定义创建所有表
+
+  // Products 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS products (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT,
+      template_text TEXT,
+      delivery_type TEXT NOT NULL DEFAULT 'text',
+      is_active INTEGER DEFAULT 1,
+      sort_order INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `)
+
+  // Product Prices 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS product_prices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL,
+      currency TEXT NOT NULL,
+      price REAL NOT NULL,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+      UNIQUE(product_id, currency)
+    );
+  `)
+
+  // Orders 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      product_id INTEGER NOT NULL,
+      email TEXT NOT NULL,
+      gateway TEXT NOT NULL,
+      amount REAL NOT NULL,
+      currency TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      gateway_order_id TEXT,
+      gateway_data TEXT,
+      notes TEXT,
+      customer_ip TEXT,
+      customer_user_agent TEXT,
+      paid_at DATETIME,
+      delivered_at DATETIME,
+      refunded_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (product_id) REFERENCES products(id)
+    );
+  `)
+
+  // Deliveries 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS deliveries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id TEXT NOT NULL,
+      delivery_type TEXT NOT NULL,
+      content TEXT,
+      download_url TEXT,
+      download_token TEXT,
+      expires_at DATETIME,
+      download_count INTEGER DEFAULT 0,
+      max_downloads INTEGER DEFAULT 3,
+      file_size INTEGER,
+      file_name TEXT,
+      is_active INTEGER DEFAULT 1,
+      delivery_method TEXT DEFAULT 'email',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+    );
+  `)
+
+  // Downloads 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS downloads (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      delivery_id INTEGER NOT NULL,
+      ip_address TEXT,
+      user_agent TEXT,
+      referer TEXT,
+      download_status TEXT DEFAULT 'success',
+      bytes_downloaded INTEGER,
+      download_time_ms INTEGER,
+      downloaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (delivery_id) REFERENCES deliveries(id) ON DELETE CASCADE
+    );
+  `)
+
+  // Payments Raw 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS payments_raw (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      gateway TEXT NOT NULL,
+      gateway_order_id TEXT,
+      gateway_transaction_id TEXT,
+      signature_valid INTEGER DEFAULT 0,
+      signature_method TEXT,
+      payload TEXT NOT NULL,
+      processed INTEGER DEFAULT 0,
+      processing_attempts INTEGER DEFAULT 0,
+      error_message TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      processed_at DATETIME
+    );
+  `)
+
+  // Inventory Text 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS inventory_text (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      batch_name TEXT,
+      priority INTEGER DEFAULT 0,
+      is_used INTEGER DEFAULT 0,
+      used_order_id TEXT,
+      used_at DATETIME,
+      expires_at DATETIME,
+      metadata TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_by TEXT,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+      FOREIGN KEY (used_order_id) REFERENCES orders(id)
+    );
+  `)
+
+  // Settings 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      data_type TEXT DEFAULT 'string',
+      description TEXT,
+      is_public INTEGER DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_by TEXT
+    );
+  `)
+
+  // Admin Logs 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS admin_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      admin_email TEXT NOT NULL,
+      action TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      resource_id TEXT,
+      old_values TEXT,
+      new_values TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      success INTEGER DEFAULT 1,
+      error_message TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `)
+
+  // Files 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      file_name TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      file_size INTEGER NOT NULL,
+      mime_type TEXT,
+      checksum TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_by TEXT
+    );
+  `)
+
+  // Config 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS config (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      group_key TEXT NOT NULL,
+      config_key TEXT NOT NULL,
+      config_value TEXT,
+      data_type TEXT DEFAULT 'string',
+      is_encrypted INTEGER DEFAULT 0,
+      is_public INTEGER DEFAULT 0,
+      description TEXT,
+      default_value TEXT,
+      validation_rule TEXT,
+      version INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_by TEXT,
+      UNIQUE(group_key, config_key)
+    );
+  `)
+
+  // Audit Logs 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_type TEXT NOT NULL,
+      event_category TEXT NOT NULL,
+      severity TEXT NOT NULL DEFAULT 'info',
+      user_id TEXT,
+      user_email TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      request_path TEXT,
+      request_method TEXT,
+      resource_type TEXT,
+      resource_id TEXT,
+      action TEXT,
+      result TEXT,
+      details TEXT,
+      metadata TEXT,
+      risk_score INTEGER DEFAULT 0,
+      session_id TEXT,
+      trace_id TEXT,
+      tags TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `)
+
+  // Rate Limits 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS rate_limits (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      limit_key TEXT NOT NULL,
+      limit_type TEXT NOT NULL,
+      resource_type TEXT,
+      window_size INTEGER NOT NULL,
+      max_requests INTEGER NOT NULL,
+      current_requests INTEGER DEFAULT 0,
+      blocked_until DATETIME,
+      is_whitelist INTEGER DEFAULT 0,
+      violation_count INTEGER DEFAULT 0,
+      last_violation_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `)
+
+  // Security Tokens 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS security_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token_type TEXT NOT NULL,
+      token_id TEXT NOT NULL,
+      token_value TEXT,
+      token_hash TEXT,
+      associated_id TEXT,
+      associated_type TEXT,
+      purpose TEXT,
+      permissions TEXT,
+      metadata TEXT,
+      is_active INTEGER DEFAULT 1,
+      expires_at DATETIME,
+      last_used_at DATETIME,
+      usage_count INTEGER DEFAULT 0,
+      max_usage INTEGER,
+      ip_address TEXT,
+      user_agent TEXT,
+      revoked_at DATETIME,
+      revoked_by TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_by TEXT
+    );
+  `)
+
+  // 创建索引（用于性能优化）
+  createIndexes()
+}
+
+// 创建索引
+function createIndexes() {
+  console.log('📇 Creating database indexes...')
+
+  // Orders 索引
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_orders_email ON orders(email);
+    CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+    CREATE INDEX IF NOT EXISTS idx_orders_gateway ON orders(gateway);
+    CREATE INDEX IF NOT EXISTS idx_orders_gateway_order_id ON orders(gateway_order_id);
+    CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
+    CREATE INDEX IF NOT EXISTS idx_orders_email_status ON orders(email, status);
+    CREATE INDEX IF NOT EXISTS idx_orders_status_created_at ON orders(status, created_at);
+  `)
+
+  // Products 索引
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_products_active ON products(is_active);
+    CREATE INDEX IF NOT EXISTS idx_products_sort_order ON products(sort_order);
+  `)
+
+  // Product Prices 索引
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_product_prices_product ON product_prices(product_id);
+    CREATE INDEX IF NOT EXISTS idx_product_prices_currency ON product_prices(currency);
+    CREATE INDEX IF NOT EXISTS idx_product_prices_active ON product_prices(is_active);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_product_prices_unique_currency ON product_prices(product_id, currency);
+  `)
+
+  // Deliveries 索引
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_deliveries_order_id ON deliveries(order_id);
+    CREATE INDEX IF NOT EXISTS idx_deliveries_type ON deliveries(delivery_type);
+    CREATE INDEX IF NOT EXISTS idx_deliveries_active ON deliveries(is_active);
+  `)
+
+  // Downloads 索引
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_downloads_delivery_id ON downloads(delivery_id);
+    CREATE INDEX IF NOT EXISTS idx_downloads_downloaded_at ON downloads(downloaded_at);
+    CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(download_status);
+  `)
+
+  // Inventory 索引
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_inventory_product ON inventory_text(product_id);
+    CREATE INDEX IF NOT EXISTS idx_inventory_used ON inventory_text(is_used);
+    CREATE INDEX IF NOT EXISTS idx_inventory_order ON inventory_text(used_order_id);
+  `)
+
+  // Payments Raw 索引
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_payments_raw_gateway ON payments_raw(gateway);
+    CREATE INDEX IF NOT EXISTS idx_payments_raw_order_id ON payments_raw(gateway_order_id);
+    CREATE INDEX IF NOT EXISTS idx_payments_raw_processed ON payments_raw(processed);
+  `)
+
+  console.log('✅ All indexes created successfully')
 }
 
 // 数据库健康检查

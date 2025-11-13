@@ -111,7 +111,7 @@ app.post('/create', zValidator('json', createOrderSchema), async (c) => {
     try {
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
       const paymentLink = await paymentService.createPayment(orderId, {
-        returnUrl: `${baseUrl}/payment/return?orderId=${orderId}`,
+        returnUrl: `${baseUrl}/payment/${orderId}`,
         notifyUrl: `${process.env.BASE_URL}/webhooks/${data.gateway}`
       })
 
@@ -251,7 +251,7 @@ app.post('/payments/:orderId/retry', async (c) => {
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
 
     const paymentLink = await paymentService.createPayment(orderId, {
-      returnUrl: `${baseUrl}/payment/return?orderId=${orderId}`,
+      returnUrl: `${baseUrl}/payment/${orderId}`,
       notifyUrl: `${process.env.BASE_URL}/webhooks`
     })
 

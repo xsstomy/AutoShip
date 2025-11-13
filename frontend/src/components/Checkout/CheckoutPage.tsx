@@ -6,9 +6,11 @@ import type {
   OrderCreateRequest
 } from '../../types/order';
 import type { Currency } from '../../types/product';
+import type { PaymentGateway } from '../../types/payment';
 import { createOrder } from '../../services/checkoutApi';
 import { validateEmail, sanitizeEmail } from '../../utils/validation';
 import { formatCurrency, convertCurrency } from '../../utils/currency';
+import PaymentMethods from '../Payment/PaymentMethods';
 
 /**
  * 下单流程页面组件
@@ -31,6 +33,9 @@ const CheckoutPage: React.FC = () => {
     },
     formErrors: {},
   });
+
+  // 支付网关选择状态
+  const [selectedGateway, setSelectedGateway] = useState<PaymentGateway>('alipay');
 
   // 解析查询参数
   useEffect(() => {
@@ -132,7 +137,7 @@ const CheckoutPage: React.FC = () => {
         price: parseFloat(productParams.price),
         currency: productParams.currency,
         email: sanitizedEmail,
-        gateway: 'creem', // 默认使用 Creem 支付网关
+        gateway: selectedGateway, // 使用用户选择的支付网关
       };
 
       // 创建订单
@@ -170,21 +175,6 @@ const CheckoutPage: React.FC = () => {
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center py-12">
-            <div className="text-red-500 text-5xl mb-4">
-              <svg
-                className="w-16 h-16 mx-auto"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">参数错误</h3>
             <p className="text-gray-600 mb-6">{paramsError}</p>
             <Link
@@ -322,25 +312,19 @@ const CheckoutPage: React.FC = () => {
                 </p>
               </div>
 
+              {/* 支付方式选择 */}
+              <div>
+                <PaymentMethods
+                  selectedGateway={selectedGateway}
+                  onGatewayChange={setSelectedGateway}
+                  disabled={state.loading}
+                />
+              </div>
+
               {/* 错误信息 */}
               {state.error && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="flex items-center">
-                    <svg
-                      className="w-5 h-5 text-red-500 mr-2"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <span className="text-red-700">{state.error}</span>
-                  </div>
+                  <div className="text-red-700">{state.error}</div>
                 </div>
               )}
 

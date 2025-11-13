@@ -62,7 +62,7 @@ export function OrderInfo({ order, className = '' }: OrderInfoProps) {
           <span className="text-sm font-medium text-gray-500 w-24">支付方式:</span>
           <span className="text-sm text-gray-900">
             {order.gateway === 'alipay' ? '支付宝' :
-             order.gateway === 'creem' ? 'Creem' : 'PayPal'}
+             order.gateway === 'creem' ? '支付平台' : 'PayPal'}
           </span>
         </div>
 

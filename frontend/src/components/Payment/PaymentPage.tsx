@@ -151,11 +151,6 @@ const PaymentPage: React.FC<PaymentPageProps> = () => {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
           <div className="text-center">
-            <div className="text-red-500 mb-4">
-              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">加载失败</h2>
             <p className="text-gray-600 mb-6">{error || '订单信息不存在'}</p>
             <div className="space-y-3">
@@ -240,7 +235,7 @@ const PaymentPage: React.FC<PaymentPageProps> = () => {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <h3 className="text-lg font-semibold text-blue-900 mb-2">正在处理支付</h3>
             <p className="text-blue-700 mb-4 text-sm sm:text-base">
-              请在{selectedGateway === 'alipay' ? '支付宝' : 'Creem'}页面完成支付操作
+              请在{selectedGateway === 'alipay' ? '支付宝' : '支付平台'}页面完成支付操作
             </p>
             <p className="text-blue-600 text-xs sm:text-sm">
               支付完成后本页面将自动更新，请勿关闭此窗口

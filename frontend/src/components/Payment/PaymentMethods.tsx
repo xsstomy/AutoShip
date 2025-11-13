@@ -47,16 +47,6 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({
       iconBg: 'bg-blue-500',
       recommended: true,
       features: ['扫码支付', '账户余额支付', '银行卡支付']
-    },
-    {
-      id: 'creem',
-      name: 'creem',
-      displayName: 'Creem',
-      description: '全球数字支付解决方案',
-      icon: 'C',
-      iconBg: 'bg-green-500',
-      recommended: false,
-      features: ['信用卡支付', '数字钱包', '全球支付']
     }
   ];
 
@@ -102,8 +92,8 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({
 
             {/* 支付方式头部 */}
             <div className="flex items-center space-x-3 mb-3">
-              <div className={`w-12 h-12 ${method.iconBg} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                <span className="text-white font-bold text-lg">{method.icon}</span>
+              <div className={`w-10 h-10 ${method.iconBg} rounded-lg flex items-center justify-center flex-shrink-0`}>
+                <span className="text-white font-bold text-base">{method.icon}</span>
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-gray-900 truncate">
@@ -120,7 +110,7 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                   : 'border-2 border-gray-300'
               }`}>
                 {selectedGateway === method.id && (
-                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 )}
@@ -149,10 +139,7 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({
             {/* 交互反馈 */}
             {selectedGateway === method.id && !disabled && (
               <div className="mt-3 pt-3 border-t border-blue-200">
-                <div className="flex items-center text-sm text-blue-700">
-                  <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
+                <div className="text-sm text-blue-700">
                   已选择 {method.displayName}
                 </div>
               </div>

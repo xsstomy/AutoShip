@@ -41,10 +41,9 @@ const PaymentRedirect: React.FC<PaymentRedirectProps> = ({
    */
   const getGatewayDisplayName = (gateway: PaymentGateway): string => {
     const gatewayNames: Record<PaymentGateway, string> = {
-      alipay: '支付宝',
-      creem: 'Creem'
+      alipay: '支付宝'
     };
-    return gatewayNames[gateway];
+    return gatewayNames[gateway] || gateway;
   };
 
   /**
@@ -122,6 +121,17 @@ const PaymentRedirect: React.FC<PaymentRedirectProps> = ({
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">支付失败</h3>
               <p className="text-sm text-red-700 mt-1">{error}</p>
+              {/* 支付宝网关错误提示 */}
+              {(error.includes('Bad Gateway') || error.includes('502')) && (
+                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                  <p className="font-semibold text-yellow-800">💡 提示：支付宝网关暂时不可用</p>
+                  <ul className="mt-2 text-yellow-700 space-y-1 list-disc list-inside">
+                    <li>这是支付宝沙箱环境的临时问题</li>
+                    <li>请等待几分钟后重试</li>
+                    <li>或联系支付宝开放平台确认应用状态</li>
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
         </div>

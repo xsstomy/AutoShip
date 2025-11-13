@@ -43,42 +43,85 @@ async function apiRequest<T>(
  * 获取订单信息
  */
 export async function getOrderInfo(orderId: string): Promise<OrderInfo> {
-  return apiRequest<OrderInfo>(`/orders/${orderId}`);
+  const response = await apiRequest<{ success: boolean; data: OrderInfo }>(`/orders/${orderId}`);
+  if (!response.success || !response.data) {
+    throw new Error('获取订单信息失败');
+  }
+  return response.data;
 }
 
 /**
  * 初始化支付
  */
 export async function initPayment(request: PaymentInitRequest): Promise<PaymentInitResponse> {
-  return apiRequest<PaymentInitResponse>(`/payment/init/${request.orderId}`, {
+  // 注意：这个API可能不需要，因为订单创建时已经生成了支付链接
+  // 这里暂时使用重试支付API来获取新的支付链接
+  const response = await apiRequest<{ success: boolean; data: any }>(`/checkout/payments/${request.orderId}/retry`, {
     method: 'POST',
-    body: JSON.stringify({ gateway: request.gateway }),
   });
+  if (!response.success || !response.data) {
+    throw new Error('初始化支付失败');
+  }
+  return {
+    success: true,
+    data: {
+      paymentUrl: response.data.paymentUrl,
+      gatewayOrderId: response.data.gatewayOrderId,
+      expiresAt: response.data.expiresAt,
+    }
+  };
 }
 
 /**
  * 查询支付状态
  */
 export async function getPaymentStatus(orderId: string): Promise<PaymentStatusResponse> {
-  return apiRequest<PaymentStatusResponse>(`/payment/status/${orderId}`);
+  const response = await apiRequest<{ success: boolean; data: any }>(`/checkout/payments/${orderId}/status`);
+  if (!response.success || !response.data) {
+    throw new Error('查询支付状态失败');
+  }
+  return {
+    success: true,
+    data: {
+      status: response.data.status,
+      gatewayOrderId: response.data.gatewayOrderId,
+      paidAt: response.data.paidAt,
+      failedReason: response.data.failedReason,
+    }
+  };
 }
 
 /**
  * 重试支付
  */
 export async function retryPayment(orderId: string): Promise<PaymentInitResponse> {
-  return apiRequest<PaymentInitResponse>(`/payment/retry/${orderId}`, {
+  const response = await apiRequest<{ success: boolean; data: any }>(`/checkout/payments/${orderId}/retry`, {
     method: 'POST',
   });
+  if (!response.success || !response.data) {
+    throw new Error('重试支付失败');
+  }
+  return {
+    success: true,
+    data: {
+      paymentUrl: response.data.paymentUrl,
+      gatewayOrderId: response.data.gatewayOrderId,
+      expiresAt: response.data.expiresAt,
+    }
+  };
 }
 
 /**
  * 验证订单 ID 格式
  */
 export function isValidOrderId(orderId: string): boolean {
-  // 简单的 UUID 格式验证
+  // 支持两种格式：
+  // 1. UUID 格式：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  // 2. ORDER 格式：ORDER + 14位时间戳 + 4位随机数
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(orderId);
+  const orderRegex = /^ORDER\d{18}$/; // ORDER + 14位时间戳
+
+  return uuidRegex.test(orderId) || orderRegex.test(orderId);
 }
 
 /**
