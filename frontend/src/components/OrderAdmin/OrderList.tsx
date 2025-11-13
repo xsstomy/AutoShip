@@ -82,7 +82,7 @@ export function OrderList({ orders, pagination, onPageChange, onViewDetails, onR
                   {order.email}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {order.amount.toFixed(2)} {order.currency}
+                  {order.amount ? order.amount.toFixed(2) : '0.00'} {order.currency || ''}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {getGatewayLabel(order.gateway)}

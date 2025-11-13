@@ -20,15 +20,15 @@ const apiClient = axios.create({
 });
 
 /**
- * 请求拦截器 - 添加认证 token（如果需要）
+ * 请求拦截器 - 添加认证 token
  */
 apiClient.interceptors.request.use(
   (config) => {
-    // 可以在这里添加认证 token
-    // const token = localStorage.getItem('auth_token');
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    // 从localStorage获取token
+    const token = localStorage.getItem('admin_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => {
@@ -102,7 +102,9 @@ export const getProducts = async (): Promise<ProductListResponse> => {
   }
 
   try {
-    const response = await apiClient.get<ProductListResponse>('/products');
+    const response = await apiClient.get<ProductListResponse>('/admin/products', {
+      params: { page: 1, limit: 20 },
+    });
     return response.data;
   } catch (error) {
     console.error('获取商品列表失败:', error);
@@ -127,7 +129,7 @@ export const getProductById = async (id: string): Promise<ProductDetailResponse>
   }
 
   try {
-    const response = await apiClient.get<ProductDetailResponse>(`/products/${id}`);
+    const response = await apiClient.get<ProductDetailResponse>(`/admin/products/${id}`);
     return response.data;
   } catch (error) {
     console.error('获取商品详情失败:', error);
@@ -141,8 +143,8 @@ export const getProductById = async (id: string): Promise<ProductDetailResponse>
  */
 export const refreshProducts = async (): Promise<ProductListResponse> => {
   try {
-    const response = await apiClient.get<ProductListResponse>('/products', {
-      params: { refresh: true },
+    const response = await apiClient.get<ProductListResponse>('/admin/products', {
+      params: { page: 1, limit: 20, refresh: true },
     });
     return response.data;
   } catch (error) {

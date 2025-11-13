@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { importInventory, type ImportResult } from '../../../services/inventoryApi'
+import { importInventory, type ImportResult } from '../../services/inventoryApi'
 
 interface ImportInventoryModalProps {
   isOpen: boolean

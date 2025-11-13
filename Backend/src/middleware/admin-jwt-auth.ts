@@ -15,7 +15,13 @@ export interface AdminUser {
  */
 export async function adminAuth(c: Context, next: Next) {
   try {
-    const token = c.req.header('cookie')?.match(/admin_token=([^;]+)/)?.[1]
+    // 首先尝试从Authorization header获取token
+    let token = c.req.header('Authorization')?.replace(/^Bearer\s+/, '')
+
+    // 如果Authorization header中没有token，尝试从cookie获取
+    if (!token) {
+      token = c.req.header('cookie')?.match(/admin_token=([^;]+)/)?.[1]
+    }
 
     if (!token) {
       return c.json({
@@ -140,7 +146,13 @@ export async function requireSuperAdmin(c: Context, next: Next) {
  */
 export async function optionalAdminAuth(c: Context, next: Next) {
   try {
-    const token = c.req.header('cookie')?.match(/admin_token=([^;]+)/)?.[1]
+    // 首先尝试从Authorization header获取token
+    let token = c.req.header('Authorization')?.replace(/^Bearer\s+/, '')
+
+    // 如果Authorization header中没有token，尝试从cookie获取
+    if (!token) {
+      token = c.req.header('cookie')?.match(/admin_token=([^;]+)/)?.[1]
+    }
 
     if (token) {
       const payload = verifyToken(token)

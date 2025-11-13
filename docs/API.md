@@ -1,3 +1,9 @@
+  默认管理员账号：
+  - 用户名: admin
+  - 密码: admin123
+  - 邮箱: admin@example.com
+  - 角色: super_admin
+
 # AutoShip API 文档
 
 ## 概述

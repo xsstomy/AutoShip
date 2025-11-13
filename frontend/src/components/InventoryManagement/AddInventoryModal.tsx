@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { addInventory } from '../../../services/inventoryApi'
+import { addInventory } from '../../services/inventoryApi'
 
 interface AddInventoryModalProps {
   isOpen: boolean

@@ -205,11 +205,31 @@ export function decrypt(encryptedData: string, key: string): string {
 
 /**
  * 获取客户端IP地址
+ * 支持 Hono Request 对象和其他类型的 request
  */
 export function getClientIP(request: any): string {
-  const forwarded = request.headers['x-forwarded-for']
-  const ip = forwarded ? forwarded.split(',')[0] : request.ip
-  return ip || request.connection.remoteAddress || 'unknown'
+  // 支持 Hono Request 对象
+  if (request && typeof request.header === 'function') {
+    const forwarded = request.header('x-forwarded-for')
+    if (forwarded) {
+      return forwarded.split(',')[0].trim()
+    }
+    const realIp = request.header('x-real-ip')
+    if (realIp) return realIp
+    const cfConnectingIp = request.header('cf-connecting-ip')
+    if (cfConnectingIp) return cfConnectingIp
+    return request.ip || request.header('remote-address') || 'unknown'
+  }
+
+  // 支持标准 Request 对象（带 headers 属性）
+  if (request && request.headers) {
+    const forwarded = request.headers['x-forwarded-for']
+    const ip = forwarded ? forwarded.split(',')[0] : request.ip
+    return ip || request.connection?.remoteAddress || 'unknown'
+  }
+
+  // 兜底处理
+  return 'unknown'
 }
 
 /**

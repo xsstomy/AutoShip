@@ -619,8 +619,14 @@ export class OrderService {
     const totalCountResult = await countQuery
     const total = totalCountResult[0].count
 
+    // 转换数据格式，将 order 和 product 合并为扁平结构
+    const formattedOrders = orders.map(item => ({
+      ...item.order,
+      product: item.product
+    }))
+
     return {
-      orders,
+      orders: formattedOrders,
       pagination: {
         page,
         limit,

@@ -9,6 +9,7 @@ interface Admin {
 
 interface AuthContextType {
   admin: Admin | null
+  token: string | null
   loading: boolean
   login: (username: string, password: string) => Promise<boolean>
   logout: () => Promise<void>
@@ -20,11 +21,17 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [admin, setAdmin] = useState<Admin | null>(null)
+  const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const API_BASE = '/api/v1/admin'
+  const API_BASE = '/api/v1/admin/auth'
 
   useEffect(() => {
+    // 从localStorage恢复token
+    const savedToken = localStorage.getItem('admin_token')
+    if (savedToken) {
+      setToken(savedToken)
+    }
     checkAuth()
   }, [])
 
@@ -62,6 +69,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (data.success) {
         setAdmin(data.data.admin)
+        // 保存token到state和localStorage
+        if (data.data.token) {
+          setToken(data.data.token)
+          localStorage.setItem('admin_token', data.data.token)
+        }
         return true
       } else {
         throw new Error(data.error || '登录失败')
@@ -82,6 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Logout failed:', error)
     } finally {
       setAdmin(null)
+      setToken(null)
+      localStorage.removeItem('admin_token')
     }
   }
 
@@ -105,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ admin, loading, login, logout, refreshToken, checkAuth }}>
+    <AuthContext.Provider value={{ admin, token, loading, login, logout, refreshToken, checkAuth }}>
       {children}
     </AuthContext.Provider>
   )

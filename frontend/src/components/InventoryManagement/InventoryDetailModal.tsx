@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getInventoryDetail, deleteInventoryItems, type ProductInventory, type InventoryItem } from '../../../services/inventoryApi'
+import { getInventoryDetail, deleteInventoryItems, type ProductInventory, type InventoryItem } from '../../services/inventoryApi'
 
 interface InventoryDetailModalProps {
   product: ProductInventory | null

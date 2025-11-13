@@ -2,7 +2,8 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { productService } from '../services/product-service'
 import { inventoryService } from '../services/inventory-service'
-import { verifyToken, getClientIP, sanitizeForLog } from '../utils/auth'
+import { adminAuth } from '../middleware/admin-jwt-auth'
+import { getClientIP, sanitizeForLog } from '../utils/auth'
 import { AdminEventType, AdminEventCategory } from '../db/schema'
 
 const app = new Hono()
@@ -17,36 +18,11 @@ const updatePriceSchema = z.object({
   })),
 })
 
-/**
- * 管理员权限验证中间件
- */
-async function requireAdminAuth(c: any, next: () => Promise<void>) {
-  const authHeader = c.req.header('Authorization')
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ error: '未授权访问' }, 401)
-  }
-
-  const token = authHeader.substring(7)
-
-  try {
-    const decoded = verifyToken(token)
-    if (!decoded || decoded.role !== 'admin') {
-      return c.json({ error: '权限不足' }, 403)
-    }
-
-    // 将管理员信息附加到上下文
-    c.set('admin', decoded)
-    await next()
-  } catch (error) {
-    return c.json({ error: '令牌无效或已过期' }, 401)
-  }
-}
 
 /**
  * 获取商品列表（包含价格和库存信息）
  */
-app.get('/products', requireAdminAuth, async (c) => {
+app.get('/products', adminAuth, async (c) => {
   try {
     // 获取查询参数
     const page = parseInt(c.req.query('page') || '1')
@@ -117,7 +93,7 @@ app.get('/products', requireAdminAuth, async (c) => {
 /**
  * 获取单个商品详情（包含价格和库存信息）
  */
-app.get('/products/:id', requireAdminAuth, async (c) => {
+app.get('/products/:id', adminAuth, async (c) => {
   try {
     const productId = parseInt(c.req.param('id'))
 
@@ -158,7 +134,7 @@ app.get('/products/:id', requireAdminAuth, async (c) => {
 /**
  * 更新商品价格
  */
-app.put('/products/:id/prices', requireAdminAuth, async (c) => {
+app.put('/products/:id/prices', adminAuth, async (c) => {
   const admin = c.get('admin')
   const clientIP = getClientIP(c.req)
 
@@ -239,7 +215,7 @@ app.put('/products/:id/prices', requireAdminAuth, async (c) => {
 /**
  * 获取商品库存详情
  */
-app.get('/products/:id/inventory', requireAdminAuth, async (c) => {
+app.get('/products/:id/inventory', adminAuth, async (c) => {
   try {
     const productId = parseInt(c.req.param('id'))
 
@@ -281,7 +257,7 @@ app.get('/products/:id/inventory', requireAdminAuth, async (c) => {
 /**
  * 获取库存预警列表
  */
-app.get('/inventory/low-stock', requireAdminAuth, async (c) => {
+app.get('/inventory/low-stock', adminAuth, async (c) => {
   try {
     // 获取所有商品
     const products = await productService.getActiveProducts()

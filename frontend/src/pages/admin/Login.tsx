@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 
 export default function AdminLogin() {
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('admin')
+  const [password, setPassword] = useState('admin123')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
@@ -24,6 +24,26 @@ export default function AdminLogin() {
       setLoading(false)
     }
   }
+
+  const handleQuickLogin = async () => {
+    setError('')
+    setLoading(true)
+
+    try {
+      await login('admin', 'admin123')
+      navigate('/admin/dashboard')
+    } catch (err: any) {
+      setError(err.message || '登录失败，请检查用户名和密码')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  React.useEffect(() => {
+    // 组件加载时自动填充默认账号密码
+    setUsername('admin')
+    setPassword('admin123')
+  }, [])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -67,17 +87,28 @@ export default function AdminLogin() {
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? '登录中...' : '登录'}
-          </button>
+          <div className="space-y-3">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? '登录中...' : '登录'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleQuickLogin}
+              disabled={loading}
+              className="w-full bg-green-500 text-white font-bold py-2 px-4 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? '登录中...' : '快速登录 (admin)'}
+            </button>
+          </div>
         </form>
 
         <div className="mt-4 text-center text-sm text-gray-600">
-          <p>默认管理员账户：admin / password123</p>
+          <p>默认管理员账户：admin / admin123</p>
         </div>
       </div>
     </div>

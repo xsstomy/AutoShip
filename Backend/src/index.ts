@@ -10,15 +10,17 @@ import webhookRoutes from './routes/webhooks'
 import adminAuthRoutes from './routes/admin-auth'
 import adminProductRoutes from './routes/admin-products'
 import adminInventoryRoutes from './routes/admin-inventory'
+import adminOrderRoutes from './routes/admin-orders'
 import { initDatabase } from './db'
 
 const app = new Hono()
 
 // CORS middleware
 app.use('/api/*', cors({
-  origin: '*',
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
 }))
 
 // Basic routes
@@ -36,6 +38,7 @@ app.route('/webhooks', webhookRoutes)
 app.route('/api/v1/admin/auth', adminAuthRoutes)
 app.route('/api/v1/admin', adminProductRoutes)
 app.route('/api/v1/admin', adminInventoryRoutes)
+app.route('/api/v1/admin', adminOrderRoutes)
 
 // Initialize database
 console.log('Initializing database...')

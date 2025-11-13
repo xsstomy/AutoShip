@@ -2,7 +2,8 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { productService } from '../services/product-service'
 import { inventoryService } from '../services/inventory-service'
-import { verifyToken, getClientIP, sanitizeForLog } from '../utils/auth'
+import { adminAuth } from '../middleware/admin-jwt-auth'
+import { getClientIP, sanitizeForLog } from '../utils/auth'
 import { AdminEventType, AdminEventCategory } from '../db/schema'
 
 const app = new Hono()
@@ -34,35 +35,13 @@ const restockSchema = z.object({
 })
 
 /**
- * 管理员权限验证中间件
+ * 管理员权限验证中间件 - 已使用 adminAuth
  */
-async function requireAdminAuth(c: any, next: () => Promise<void>) {
-  const authHeader = c.req.header('Authorization')
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ success: false, error: '未授权访问' }, 401)
-  }
-
-  const token = authHeader.substring(7)
-
-  try {
-    const decoded = verifyToken(token)
-    if (!decoded || decoded.role !== 'admin') {
-      return c.json({ success: false, error: '权限不足' }, 403)
-    }
-
-    // 将管理员信息附加到上下文
-    c.set('admin', decoded)
-    await next()
-  } catch (error) {
-    return c.json({ success: false, error: '令牌无效或已过期' }, 401)
-  }
-}
 
 /**
  * 获取商品库存列表（带库存状态）
  */
-app.get('/inventory', requireAdminAuth, async (c) => {
+app.get('/inventory', adminAuth, async (c) => {
   try {
     const admin = c.get('admin')
     const page = parseInt(c.req.query('page') || '1')
@@ -152,7 +131,7 @@ app.get('/inventory', requireAdminAuth, async (c) => {
 /**
  * 获取库存详情
  */
-app.get('/inventory/:productId', requireAdminAuth, async (c) => {
+app.get('/inventory/:productId', adminAuth, async (c) => {
   try {
     const admin = c.get('admin')
     const productId = parseInt(c.req.param('productId'))
@@ -218,7 +197,7 @@ app.get('/inventory/:productId', requireAdminAuth, async (c) => {
 /**
  * 批量导入库存
  */
-app.post('/inventory/import', requireAdminAuth, async (c) => {
+app.post('/inventory/import', adminAuth, async (c) => {
   try {
     const admin = c.get('admin')
     const body = await c.req.json()
@@ -271,7 +250,7 @@ app.post('/inventory/import', requireAdminAuth, async (c) => {
 /**
  * 添加库存
  */
-app.post('/inventory', requireAdminAuth, async (c) => {
+app.post('/inventory', adminAuth, async (c) => {
   try {
     const admin = c.get('admin')
     const body = await c.req.json()
@@ -321,7 +300,7 @@ app.post('/inventory', requireAdminAuth, async (c) => {
 /**
  * 删除库存项
  */
-app.delete('/inventory/:productId/items', requireAdminAuth, async (c) => {
+app.delete('/inventory/:productId/items', adminAuth, async (c) => {
   try {
     const admin = c.get('admin')
     const productId = parseInt(c.req.param('productId'))
@@ -368,7 +347,7 @@ app.delete('/inventory/:productId/items', requireAdminAuth, async (c) => {
 /**
  * 获取库存统计
  */
-app.get('/inventory/stats', requireAdminAuth, async (c) => {
+app.get('/inventory/stats', adminAuth, async (c) => {
   try {
     // 获取所有商品
     const allProducts = await productService.queryProducts({ page: 1, limit: 1000 })
@@ -449,7 +428,7 @@ app.get('/inventory/stats', requireAdminAuth, async (c) => {
 /**
  * 扣减库存（下单时调用）
  */
-app.post('/inventory/deduct', requireAdminAuth, async (c) => {
+app.post('/inventory/deduct', adminAuth, async (c) => {
   try {
     const admin = c.get('admin')
     const body = await c.req.json()
@@ -497,7 +476,7 @@ app.post('/inventory/deduct', requireAdminAuth, async (c) => {
 /**
  * 返还库存（退款时调用）
  */
-app.post('/inventory/restock', requireAdminAuth, async (c) => {
+app.post('/inventory/restock', adminAuth, async (c) => {
   try {
     const admin = c.get('admin')
     const body = await c.req.json()

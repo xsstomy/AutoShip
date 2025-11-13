@@ -40,7 +40,7 @@ async function requireAdminAuth(c: any, next: () => Promise<void>) {
 
   try {
     const decoded = verifyToken(token)
-    if (!decoded || decoded.role !== 'admin') {
+    if (!decoded || !['admin', 'super_admin'].includes(decoded.role)) {
       return c.json({ success: false, error: '权限不足' }, 403)
     }
 
