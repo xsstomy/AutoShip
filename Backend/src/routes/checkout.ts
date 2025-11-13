@@ -9,6 +9,30 @@ import { Gateway } from '../types/orders'
 
 const app = new Hono()
 
+// 订单ID生成函数 (ORDER + YYYYMMDDHHmmss + 4位随机数) - 使用北京时间
+function generateOrderId(): string {
+  // 获取北京时间 (UTC+8)
+  const now = new Date()
+  const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+
+  const timestamp = beijingTime.getFullYear().toString() +
+    (beijingTime.getMonth() + 1).toString().padStart(2, '0') +
+    beijingTime.getDate().toString().padStart(2, '0') +
+    beijingTime.getHours().toString().padStart(2, '0') +
+    beijingTime.getMinutes().toString().padStart(2, '0') +
+    beijingTime.getSeconds().toString().padStart(2, '0')
+
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+  return `ORDER${timestamp}${random}`
+}
+
+// 获取北京时间字符串
+function getBeijingTimeString(): string {
+  const now = new Date()
+  const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+  return beijingTime.toISOString().replace('Z', '+08:00')
+}
+
 // 订单创建请求的验证 schema
 const createOrderSchema = z.object({
   productId: z.string().min(1, '商品ID不能为空'),
@@ -78,10 +102,13 @@ app.post('/create', zValidator('json', createOrderSchema), async (c) => {
       }
     }
 
-    // 3. 生成订单ID（UUID v4）
-    const orderId = crypto.randomUUID()
+    // 3. 生成业务订单ID（北京时间）
+    const orderId = generateOrderId()
 
-    // 4. 创建订单记录
+    // 4. 获取北京时间
+    const beijingTime = getBeijingTimeString()
+
+    // 5. 创建订单记录
     const newOrder = {
       id: orderId,
       productId: parseInt(data.productId),
@@ -90,11 +117,13 @@ app.post('/create', zValidator('json', createOrderSchema), async (c) => {
       amount: data.price,
       currency: data.currency,
       status: 'pending' as const,
+      createdAt: beijingTime,
+      updatedAt: beijingTime,
     }
 
     await db.insert(orders).values(newOrder)
 
-    // 5. 返回订单信息
+    // 6. 返回订单信息
     const orderResponse = {
       id: orderId,
       productId: data.productId,
@@ -103,11 +132,11 @@ app.post('/create', zValidator('json', createOrderSchema), async (c) => {
       amount: data.price,
       currency: data.currency,
       status: 'pending' as const,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: beijingTime,
+      updatedAt: beijingTime,
     }
 
-    // 6. 生成支付链接
+    // 7. 生成支付链接
     try {
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
       const paymentLink = await paymentService.createPayment(orderId, {

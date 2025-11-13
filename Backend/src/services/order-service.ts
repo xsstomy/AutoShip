@@ -2,7 +2,6 @@ import { db, schema, withTransaction } from '../db'
 import { eq, and, desc, asc, count, like, or, sql } from 'drizzle-orm'
 import { OrderStatus, Currency, Gateway } from '../db/schema'
 import { validateOrder, validateOrderCreate, validateOrderUpdate, validateOrderQuery } from '../db/validation'
-import { randomUUID } from 'crypto'
 
 // 订单服务类
 export class OrderService {
@@ -13,8 +12,11 @@ export class OrderService {
     const validatedData = validateOrderCreate(orderData)
 
     return await withTransaction(async () => {
-      // 生成UUID作为订单ID
-      const orderId = randomUUID()
+      // 使用传入的业务订单ID，不再生成UUID
+      const orderId = orderData.id
+
+      // 使用传入的时间，如果没有则使用当前北京时间
+      const currentTime = orderData.createdAt || orderData.updatedAt || new Date().toISOString()
 
       const order = await db.insert(schema.orders)
         .values({
@@ -30,6 +32,8 @@ export class OrderService {
           notes: validatedData.notes,
           customerIp: validatedData.customerIp,
           customerUserAgent: validatedData.customerUserAgent,
+          createdAt: currentTime,
+          updatedAt: currentTime,
         })
         .returning()
 

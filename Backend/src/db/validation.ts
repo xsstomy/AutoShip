@@ -13,7 +13,7 @@ export const productSchema = z.object({
   name: z.string().min(1, 'Product name is required').max(255, 'Product name too long'),
   description: z.string().max(2000, 'Description too long').optional(),
   templateText: z.string().optional(),
-  deliveryType: z.nativeEnum(DeliveryType),
+  deliveryType: z.enum(['text', 'download', 'hybrid']),
   isActive: z.boolean().default(true),
   sortOrder: z.number().int().min(0).default(0),
 })
@@ -68,7 +68,7 @@ export const orderUpdateSchema = orderSchema.partial().omit({
 // 发货记录验证模式
 export const deliverySchema = z.object({
   orderId: uuidSchema,
-  deliveryType: z.nativeEnum(DeliveryType),
+  deliveryType: z.enum(['text', 'download', 'hybrid']),
   content: z.string().optional(),
   downloadUrl: z.string().url().optional(),
   downloadToken: z.string().min(32, 'Download token must be at least 32 characters').optional(),

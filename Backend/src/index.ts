@@ -11,6 +11,7 @@ import adminAuthRoutes from './routes/admin-auth'
 import adminProductRoutes from './routes/admin-products'
 import adminInventoryRoutes from './routes/admin-inventory'
 import adminOrderRoutes from './routes/admin-orders'
+import productRoutes from './routes/products'
 import { initDatabase } from './db'
 
 const app = new Hono()
@@ -30,6 +31,7 @@ app.get('/api/health', (c) => c.json({ status: 'ok' }))
 // API routes
 app.route('/api/v1/checkout', checkoutRoutes)
 app.route('/api/v1/orders', orderRoutes)
+app.route('/api/v1/products', productRoutes)
 
 // Webhook routes (without /api prefix for third-party integrations)
 app.route('/webhooks', webhookRoutes)

@@ -17,18 +17,28 @@ import { withTransaction } from '../db'
 
 const app = new Hono()
 
-// 订单ID生成函数 (ORDER + YYYYMMDDHHmmss + 4位随机数)
+// 订单ID生成函数 (ORDER + YYYYMMDDHHmmss + 4位随机数) - 使用北京时间
 function generateOrderId(): string {
+  // 获取北京时间 (UTC+8)
   const now = new Date()
-  const timestamp = now.getFullYear().toString() +
-    (now.getMonth() + 1).toString().padStart(2, '0') +
-    now.getDate().toString().padStart(2, '0') +
-    now.getHours().toString().padStart(2, '0') +
-    now.getMinutes().toString().padStart(2, '0') +
-    now.getSeconds().toString().padStart(2, '0')
+  const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+
+  const timestamp = beijingTime.getFullYear().toString() +
+    (beijingTime.getMonth() + 1).toString().padStart(2, '0') +
+    beijingTime.getDate().toString().padStart(2, '0') +
+    beijingTime.getHours().toString().padStart(2, '0') +
+    beijingTime.getMinutes().toString().padStart(2, '0') +
+    beijingTime.getSeconds().toString().padStart(2, '0')
 
   const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
   return `ORDER${timestamp}${random}`
+}
+
+// 获取北京时间字符串
+function getBeijingTimeString(): string {
+  const now = new Date()
+  const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+  return beijingTime.toISOString().replace('Z', '+08:00')
 }
 
 
@@ -44,12 +54,15 @@ app.post('/create', zValidator('json', createOrderSchema), async (c) => {
     const orderId = generateOrderId()
 
     // 准备订单数据
+    const beijingTime = getBeijingTimeString()
     const orderData = {
       ...data,
       id: orderId,
       amount: data.price,
       status: 'pending' as const,
       email: data.email.toLowerCase(),
+      createdAt: beijingTime,
+      updatedAt: beijingTime,
     }
 
     // 使用事务创建订单
