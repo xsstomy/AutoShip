@@ -62,7 +62,10 @@ export default function Dashboard() {
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold mb-2">订单管理</h3>
               <p className="text-gray-600 mb-4">查看和管理订单</p>
-              <button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+              <button
+                onClick={() => navigate('/admin/orders')}
+                className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+              >
                 进入管理
               </button>
             </div>

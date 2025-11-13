@@ -553,6 +553,135 @@ export class OrderService {
   }
 
   /**
+   * 管理员订单查询（包含商品信息）
+   */
+  async getOrdersWithFilters(filters: any) {
+    const { page, limit, offset, status, gateway, dateFrom, dateTo, search, sortBy = 'createdAt', sortOrder = 'desc' } = filters
+
+    let whereConditions = []
+
+    if (status) {
+      whereConditions.push(eq(schema.orders.status, status))
+    }
+
+    if (gateway) {
+      whereConditions.push(eq(schema.orders.gateway, gateway))
+    }
+
+    if (dateFrom) {
+      whereConditions.push(sql`${schema.orders.createdAt} >= ${dateFrom}`)
+    }
+
+    if (dateTo) {
+      whereConditions.push(sql`${schema.orders.createdAt} <= ${dateTo}`)
+    }
+
+    if (search) {
+      whereConditions.push(
+        or(
+          like(schema.orders.id, `%${search}%`),
+          like(schema.orders.email, `%${search}%`)
+        )
+      )
+    }
+
+    let queryBuilder = db
+      .select({
+        order: schema.orders,
+        product: schema.products,
+      })
+      .from(schema.orders)
+      .leftJoin(schema.products, eq(schema.orders.productId, schema.products.id))
+
+    if (whereConditions.length > 0) {
+      queryBuilder = queryBuilder.where(and(...whereConditions))
+    }
+
+    // 排序
+    const orderByField = sortBy === 'createdAt' ? schema.orders.createdAt :
+                         sortBy === 'amount' ? schema.orders.amount :
+                         sortBy === 'status' ? schema.orders.status :
+                         schema.orders.createdAt
+
+    queryBuilder = sortOrder === 'desc'
+      ? queryBuilder.orderBy(desc(orderByField))
+      : queryBuilder.orderBy(asc(orderByField))
+
+    queryBuilder = queryBuilder.limit(limit).offset(offset)
+
+    const orders = await queryBuilder
+
+    // 获取总数
+    let countQuery = db.select({ count: count() }).from(schema.orders)
+    if (whereConditions.length > 0) {
+      countQuery = countQuery.where(and(...whereConditions))
+    }
+    const totalCountResult = await countQuery
+    const total = totalCountResult[0].count
+
+    return {
+      orders,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNext: page * limit < total,
+        hasPrev: page > 1,
+      }
+    }
+  }
+
+  /**
+   * 获取订单筛选选项
+   */
+  async getOrderFilterOptions() {
+    // 获取所有订单状态
+    const statusOptions = [
+      { value: 'pending', label: '待支付' },
+      { value: 'paid', label: '已支付' },
+      { value: 'delivered', label: '已发货' },
+      { value: 'completed', label: '已完成' },
+      { value: 'refunded', label: '已退款' },
+      { value: 'failed', label: '失败' },
+      { value: 'cancelled', label: '已取消' },
+    ]
+
+    // 获取所有支付网关
+    const gatewayOptions = [
+      { value: 'alipay', label: '支付宝' },
+      { value: 'creem', label: 'Creem' },
+    ]
+
+    // 获取所有货币类型
+    const currencyOptions = [
+      { value: 'CNY', label: '人民币 (CNY)' },
+      { value: 'USD', label: '美元 (USD)' },
+    ]
+
+    return {
+      statuses: statusOptions,
+      gateways: gatewayOptions,
+      currencies: currencyOptions,
+      dateRanges: [
+        { value: 'today', label: '今天' },
+        { value: 'yesterday', label: '昨天' },
+        { value: 'last7days', label: '最近7天' },
+        { value: 'last30days', label: '最近30天' },
+        { value: 'thisMonth', label: '本月' },
+        { value: 'lastMonth', label: '上月' },
+      ],
+      sortOptions: [
+        { value: 'createdAt:desc', label: '创建时间 (最新在前)' },
+        { value: 'createdAt:asc', label: '创建时间 (最旧在前)' },
+        { value: 'amount:desc', label: '金额 (高到低)' },
+        { value: 'amount:asc', label: '金额 (低到高)' },
+        { value: 'status:asc', label: '状态 (A-Z)' },
+      ]
+    }
+  }
+
+  /**
    * 构建查询条件（内部方法）
    */
   private _buildWhereConditions(query: any) {
