@@ -7,6 +7,7 @@ import { OrderDetailPage } from './pages/OrderDetailPage';
 import AdminLogin from './pages/admin/Login';
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminProductManagement from './pages/AdminProductManagement';
+import AdminInventoryManagement from './pages/AdminInventoryManagement';
 
 /**
  * 主应用组件
@@ -27,6 +28,7 @@ function App() {
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/products" element={<AdminProductManagement />} />
+        <Route path="/admin/inventory" element={<AdminInventoryManagement />} />
       </Routes>
     </Router>
   );

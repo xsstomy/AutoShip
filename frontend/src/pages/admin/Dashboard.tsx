@@ -51,7 +51,10 @@ export default function Dashboard() {
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold mb-2">库存管理</h3>
               <p className="text-gray-600 mb-4">管理卡密和文本库存</p>
-              <button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+              <button
+                onClick={() => navigate('/admin/inventory')}
+                className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+              >
                 进入管理
               </button>
             </div>

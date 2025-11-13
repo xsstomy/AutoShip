@@ -9,6 +9,7 @@ import orderRoutes from './routes/orders'
 import webhookRoutes from './routes/webhooks'
 import adminAuthRoutes from './routes/admin-auth'
 import adminProductRoutes from './routes/admin-products'
+import adminInventoryRoutes from './routes/admin-inventory'
 import { initDatabase } from './db'
 
 const app = new Hono()
@@ -34,6 +35,7 @@ app.route('/webhooks', webhookRoutes)
 // Admin routes
 app.route('/api/v1/admin/auth', adminAuthRoutes)
 app.route('/api/v1/admin', adminProductRoutes)
+app.route('/api/v1/admin', adminInventoryRoutes)
 
 // Initialize database
 console.log('Initializing database...')
