@@ -7,6 +7,8 @@ import { cors } from 'hono/cors'
 import checkoutRoutes from './routes/checkout'
 import orderRoutes from './routes/orders'
 import webhookRoutes from './routes/webhooks'
+import adminAuthRoutes from './routes/admin-auth'
+import adminProductRoutes from './routes/admin-products'
 import { initDatabase } from './db'
 
 const app = new Hono()
@@ -29,8 +31,9 @@ app.route('/api/v1/orders', orderRoutes)
 // Webhook routes (without /api prefix for third-party integrations)
 app.route('/webhooks', webhookRoutes)
 
-// TODO: Add more routes
-// - /api/admin/* - Admin routes
+// Admin routes
+app.route('/api/v1/admin/auth', adminAuthRoutes)
+app.route('/api/v1/admin', adminProductRoutes)
 
 // Initialize database
 console.log('Initializing database...')

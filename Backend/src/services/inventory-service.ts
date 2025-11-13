@@ -125,6 +125,26 @@ export class InventoryService {
   }
 
   /**
+   * 获取产品库存统计（别名方法，为了兼容性）
+   */
+  async getProductInventoryStats(productId: number) {
+    return this.getInventoryStats(productId)
+  }
+
+  /**
+   * 获取最近入库的库存项
+   */
+  async getRecentInventoryItems(productId: number, limit = 10) {
+    const items = await db.select()
+      .from(schema.inventoryText)
+      .where(eq(schema.inventoryText.productId, productId))
+      .orderBy(desc(schema.inventoryText.createdAt))
+      .limit(limit)
+
+    return items
+  }
+
+  /**
    * 获取产品库存统计
    */
   async getInventoryStats(productId: number) {
