@@ -21,3 +21,12 @@ export {
 
 // 其他专用中间件导出
 export { securityRequestLogging } from './request-logging'
+
+// 管理员JWT认证中间件导出
+export {
+  adminAuth,
+  requireRole,
+  requireSuperAdmin,
+  optionalAdminAuth,
+  adminActivityLogger
+} from './admin-jwt-auth'

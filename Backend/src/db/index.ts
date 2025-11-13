@@ -72,7 +72,10 @@ async function checkTablesExist(): Promise<{ allTablesExist: boolean; missingTab
     'config',
     'audit_logs',
     'rate_limits',
-    'security_tokens'
+    'security_tokens',
+    'admin_users',
+    'admin_sessions',
+    'admin_audit_logs'
   ]
 
   const missingTables: string[] = []
@@ -367,6 +370,68 @@ async function createAllTables() {
     );
   `)
 
+  // Admin Users 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'admin',
+      is_active INTEGER DEFAULT 1,
+      password_changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_login_at DATETIME,
+      last_login_ip TEXT,
+      failed_login_attempts INTEGER DEFAULT 0,
+      locked_until DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_by TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_by TEXT
+    );
+  `)
+
+  // Admin Sessions 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS admin_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      admin_id INTEGER NOT NULL,
+      session_id TEXT NOT NULL UNIQUE,
+      token_hash TEXT NOT NULL,
+      ip_address TEXT,
+      user_agent TEXT,
+      is_active INTEGER DEFAULT 1,
+      last_activity_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_by TEXT,
+      FOREIGN KEY (admin_id) REFERENCES admin_users(id) ON DELETE CASCADE
+    );
+  `)
+
+  // Admin Audit Logs 表
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS admin_audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      admin_id INTEGER,
+      session_id TEXT,
+      event_type TEXT NOT NULL,
+      event_category TEXT NOT NULL DEFAULT 'auth',
+      severity TEXT NOT NULL DEFAULT 'info',
+      ip_address TEXT,
+      user_agent TEXT,
+      request_path TEXT,
+      request_method TEXT,
+      old_values TEXT,
+      new_values TEXT,
+      success INTEGER DEFAULT 1,
+      error_message TEXT,
+      metadata TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (admin_id) REFERENCES admin_users(id) ON DELETE SET NULL
+    );
+  `)
+
   // 创建索引（用于性能优化）
   createIndexes()
 }
@@ -426,6 +491,37 @@ function createIndexes() {
     CREATE INDEX IF NOT EXISTS idx_payments_raw_gateway ON payments_raw(gateway);
     CREATE INDEX IF NOT EXISTS idx_payments_raw_order_id ON payments_raw(gateway_order_id);
     CREATE INDEX IF NOT EXISTS idx_payments_raw_processed ON payments_raw(processed);
+  `)
+
+  // Security Tokens 索引
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_security_token_id ON security_tokens(token_id);
+    CREATE INDEX IF NOT EXISTS idx_security_token_type ON security_tokens(token_type);
+    CREATE INDEX IF NOT EXISTS idx_security_associated_id ON security_tokens(associated_id);
+    CREATE INDEX IF NOT EXISTS idx_security_expires_at ON security_tokens(expires_at);
+  `)
+
+  // Admin Users 索引
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_users(username);
+    CREATE INDEX IF NOT EXISTS idx_admin_email ON admin_users(email);
+    CREATE INDEX IF NOT EXISTS idx_admin_is_active ON admin_users(is_active);
+  `)
+
+  // Admin Sessions 索引
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_admin_sessions_admin_id ON admin_sessions(admin_id);
+    CREATE INDEX IF NOT EXISTS idx_admin_sessions_session_id ON admin_sessions(session_id);
+    CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_admin_sessions_is_active ON admin_sessions(is_active);
+  `)
+
+  // Admin Audit Logs 索引
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_admin_id ON admin_audit_logs(admin_id);
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_event_type ON admin_audit_logs(event_type);
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_severity ON admin_audit_logs(severity);
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_created_at ON admin_audit_logs(created_at);
   `)
 
   console.log('✅ All indexes created successfully')
@@ -664,6 +760,167 @@ export class InventoryRepository extends BaseRepository<typeof schema.InventoryT
   }
 }
 
+export class AdminUserRepository extends BaseRepository<typeof schema.adminUsers> {
+  constructor() {
+    super(schema.adminUsers)
+  }
+
+  async findByUsername(username: string) {
+    const result = await db.select()
+      .from(schema.adminUsers)
+      .where(eq(schema.adminUsers.username, username))
+      .limit(1)
+    return result[0] || null
+  }
+
+  async findByEmail(email: string) {
+    const result = await db.select()
+      .from(schema.adminUsers)
+      .where(eq(schema.adminUsers.email, email))
+      .limit(1)
+    return result[0] || null
+  }
+
+  async updateLastLogin(id: number, ipAddress: string) {
+    return await db
+      .update(schema.adminUsers)
+      .set({
+        lastLoginAt: new Date().toISOString(),
+        lastLoginIp: ipAddress,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      })
+      .where(eq(schema.adminUsers.id, id))
+      .returning()
+  }
+
+  async incrementFailedAttempts(id: number) {
+    return await db
+      .update(schema.adminUsers)
+      .set({
+        failedLoginAttempts: schema.adminUsers.failedLoginAttempts + 1,
+      })
+      .where(eq(schema.adminUsers.id, id))
+      .returning()
+  }
+
+  async lockAccount(id: number, lockUntil: string) {
+    return await db
+      .update(schema.adminUsers)
+      .set({
+        lockedUntil: lockUntil,
+      })
+      .where(eq(schema.adminUsers.id, id))
+      .returning()
+  }
+
+  async updatePassword(id: number, passwordHash: string) {
+    return await db
+      .update(schema.adminUsers)
+      .set({
+        passwordHash,
+        passwordChangedAt: new Date().toISOString(),
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      })
+      .where(eq(schema.adminUsers.id, id))
+      .returning()
+  }
+}
+
+export class AdminSessionRepository extends BaseRepository<typeof schema.adminSessions> {
+  constructor() {
+    super(schema.adminSessions)
+  }
+
+  async findBySessionId(sessionId: string) {
+    const result = await db.select()
+      .from(schema.adminSessions)
+      .where(eq(schema.adminSessions.sessionId, sessionId))
+      .limit(1)
+    return result[0] || null
+  }
+
+  async findActiveByAdminId(adminId: number) {
+    return await db.select()
+      .from(schema.adminSessions)
+      .where(and(
+        eq(schema.adminSessions.adminId, adminId),
+        eq(schema.adminSessions.isActive, true)
+      ))
+  }
+
+  async deactivateSession(sessionId: string) {
+    return await db
+      .update(schema.adminSessions)
+      .set({
+        isActive: false,
+      })
+      .where(eq(schema.adminSessions.sessionId, sessionId))
+      .returning()
+  }
+
+  async deactivateAllAdminSessions(adminId: number) {
+    return await db
+      .update(schema.adminSessions)
+      .set({
+        isActive: false,
+      })
+      .where(eq(schema.adminSessions.adminId, adminId))
+      .returning()
+  }
+
+  async updateLastActivity(sessionId: string) {
+    return await db
+      .update(schema.adminSessions)
+      .set({
+        lastActivityAt: new Date().toISOString(),
+      })
+      .where(eq(schema.adminSessions.sessionId, sessionId))
+      .returning()
+  }
+
+  async cleanupExpiredSessions() {
+    return await db
+      .update(schema.adminSessions)
+      .set({
+        isActive: false,
+      })
+      .where(eq(schema.adminSessions.expiresAt, new Date().toISOString()))
+      .returning()
+  }
+}
+
+export class AdminAuditLogRepository extends BaseRepository<typeof schema.adminAuditLogs> {
+  constructor() {
+    super(schema.adminAuditLogs)
+  }
+
+  async findByAdminId(adminId: number, limit = 100) {
+    return await db.select()
+      .from(schema.adminAuditLogs)
+      .where(eq(schema.adminAuditLogs.adminId, adminId))
+      .orderBy(desc(schema.adminAuditLogs.createdAt))
+      .limit(limit)
+  }
+
+  async findByEventType(eventType: string, limit = 100) {
+    return await db.select()
+      .from(schema.adminAuditLogs)
+      .where(eq(schema.adminAuditLogs.eventType, eventType))
+      .orderBy(desc(schema.adminAuditLogs.createdAt))
+      .limit(limit)
+  }
+
+  async findByIpAddress(ipAddress: string, limit = 100) {
+    return await db.select()
+      .from(schema.adminAuditLogs)
+      .where(eq(schema.adminAuditLogs.ipAddress, ipAddress))
+      .orderBy(desc(schema.adminAuditLogs.createdAt))
+      .limit(limit)
+  }
+}
+
 // 保持原有的initDatabase函数以向后兼容
 export function initDatabase() {
   initializeDatabase().then(success => {
@@ -679,6 +936,9 @@ export function initDatabase() {
 export const productRepository = new ProductRepository()
 export const orderRepository = new OrderRepository()
 export const inventoryRepository = new InventoryRepository()
+export const adminUserRepository = new AdminUserRepository()
+export const adminSessionRepository = new AdminSessionRepository()
+export const adminAuditLogRepository = new AdminAuditLogRepository()
 
 // 导出所有必要的模块
 export {
@@ -704,5 +964,8 @@ export default {
   productRepository,
   orderRepository,
   inventoryRepository,
+  adminUserRepository,
+  adminSessionRepository,
+  adminAuditLogRepository,
   schema,
 }

@@ -428,3 +428,104 @@ export const AssociatedType = {
   ORDER: 'order',
   ADMIN: 'admin',
 } as const
+
+// Admin users - 管理员用户表
+export const adminUsers = sqliteTable('admin_users', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  username: text('username').notNull().unique(),
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  role: text('role').notNull().default('admin'), // admin, super_admin
+  isActive: integer('is_active', { mode: 'boolean' }).default(true),
+  passwordChangedAt: text('password_changed_at').default(sql`CURRENT_TIMESTAMP`), // 密码修改时间
+  lastLoginAt: text('last_login_at'), // 最后登录时间
+  lastLoginIp: text('last_login_ip'), // 最后登录IP
+  failedLoginAttempts: integer('failed_login_attempts').default(0), // 连续失败次数
+  lockedUntil: text('locked_until'), // 锁定到期时间
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  createdBy: text('created_by'),
+  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+  updatedBy: text('updated_by'),
+}, (table) => ({
+  usernameIndex: uniqueIndex('idx_admin_username').on(table.username),
+  emailIndex: uniqueIndex('idx_admin_email').on(table.email),
+  isActiveIndex: uniqueIndex('idx_admin_is_active').on(table.isActive),
+}))
+
+// Admin sessions - 管理员会话表
+export const adminSessions = sqliteTable('admin_sessions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  adminId: integer('admin_id').notNull().references(() => adminUsers.id, { onDelete: 'cascade' }),
+  sessionId: text('session_id').notNull().unique(), // 会话ID（用于关联JWT）
+  tokenHash: text('token_hash').notNull(), // 令牌哈希
+  ipAddress: text('ip_address'), // 登录IP
+  userAgent: text('user_agent'), // 用户代理
+  isActive: integer('is_active', { mode: 'boolean' }).default(true),
+  lastActivityAt: text('last_activity_at').default(sql`CURRENT_TIMESTAMP`), // 最后活动时间
+  expiresAt: text('expires_at').notNull(), // 过期时间
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  createdBy: text('created_by'),
+}, (table) => ({
+  adminIdIndex: uniqueIndex('idx_admin_sessions_admin_id').on(table.adminId),
+  sessionIdIndex: uniqueIndex('idx_admin_sessions_session_id').on(table.sessionId),
+  expiresAtIndex: uniqueIndex('idx_admin_sessions_expires_at').on(table.expiresAt),
+  isActiveIndex: uniqueIndex('idx_admin_sessions_is_active').on(table.isActive),
+}))
+
+// Admin audit logs - 管理员审计日志表（更详细的登录日志）
+export const adminAuditLogs = sqliteTable('admin_audit_logs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  adminId: integer('admin_id').references(() => adminUsers.id, { onDelete: 'set null' }),
+  sessionId: text('session_id'), // 关联的会话ID
+  eventType: text('event_type').notNull(), // login_success, login_failed, logout, password_change, etc.
+  eventCategory: text('event_category').notNull().default('auth'), // auth, action, security
+  severity: text('severity').notNull().default('info'), // info, warning, error, critical
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  requestPath: text('request_path'),
+  requestMethod: text('request_method'),
+  oldValues: text('old_values'), // 修改前的值（JSON）
+  newValues: text('new_values'), // 修改后的值（JSON）
+  success: integer('success', { mode: 'boolean' }).default(true),
+  errorMessage: text('error_message'),
+  metadata: text('metadata'), // 额外元数据（JSON格式）
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  adminIdIndex: uniqueIndex('idx_admin_audit_admin_id').on(table.adminId),
+  eventTypeIndex: uniqueIndex('idx_admin_audit_event_type').on(table.eventType),
+  severityIndex: uniqueIndex('idx_admin_audit_severity').on(table.severity),
+  createdAtIndex: uniqueIndex('idx_admin_audit_created_at').on(table.createdAt),
+}))
+
+// Types for admin tables
+export type AdminUser = typeof adminUsers.$inferSelect
+export type NewAdminUser = typeof adminUsers.$inferInsert
+export type AdminSession = typeof adminSessions.$inferSelect
+export type NewAdminSession = typeof adminSessions.$inferInsert
+export type AdminAuditLog = typeof adminAuditLogs.$inferSelect
+export type NewAdminAuditLog = typeof adminAuditLogs.$inferInsert
+
+// Admin role types
+export const AdminRole = {
+  ADMIN: 'admin',
+  SUPER_ADMIN: 'super_admin',
+} as const
+
+// Admin event types
+export const AdminEventType = {
+  LOGIN_SUCCESS: 'login_success',
+  LOGIN_FAILED: 'login_failed',
+  LOGOUT: 'logout',
+  PASSWORD_CHANGE: 'password_change',
+  PASSWORD_RESET: 'password_reset',
+  ACCOUNT_LOCKED: 'account_locked',
+  ACCOUNT_UNLOCKED: 'account_unlocked',
+  PROFILE_UPDATE: 'profile_update',
+  PERMISSION_DENIED: 'permission_denied',
+} as const
+
+export const AdminEventCategory = {
+  AUTH: 'auth',
+  ACTION: 'action',
+  SECURITY: 'security',
+} as const
