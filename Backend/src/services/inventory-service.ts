@@ -1,5 +1,5 @@
-import { db, schema, withTransaction } from '../db'
-import { eq, and, desc, asc, count, like, isNull } from 'drizzle-orm'
+import { db, schema, withTransaction, sqlite } from '../db'
+import { eq, and, desc, asc, count, like, isNull, sql, inArray } from 'drizzle-orm'
 import { validateInventoryText, validateInventoryTextUpdate } from '../db/validation'
 import { randomUUID } from 'crypto'
 
@@ -24,29 +24,22 @@ export class InventoryService {
   async addInventoryBatch(productId: number, contents: string[], options: any = {}) {
     const { batchName, createdBy, priority = 0, expiresAt } = options
 
-    // 使用 better-sqlite3 的事务，但同步执行
-    const items = db.transaction(() => {
-      const result = []
+    // 使用批量插入替代事务，避免 better-sqlite3 异步事务问题
+    const insertData = contents.map(content => ({
+      productId,
+      content: content.trim(),
+      batchName: batchName || `batch_${Date.now()}`,
+      priority,
+      expiresAt,
+      createdBy,
+    }))
 
-      for (const content of contents) {
-        const item = db.insert(schema.inventoryText)
-          .values({
-            productId,
-            content: content.trim(),
-            batchName: batchName || `batch_${Date.now()}`,
-            priority,
-            expiresAt,
-            createdBy,
-          })
-          .returning()
+    // 批量插入数据
+    const result = await db.insert(schema.inventoryText)
+      .values(insertData)
+      .returning()
 
-        result.push(item[0])
-      }
-
-      return result
-    })
-
-    return items
+    return result
   }
 
   /**
@@ -178,23 +171,28 @@ export class InventoryService {
   }
 
   /**
-   * 获取产品库存统计（优化版：分步查询获取所有统计）
+   * 获取产品库存统计（修复版：使用聚合查询确保数据一致性）
    */
   async getInventoryStats(productId: number) {
-    // 分步查询：分别获取不同状态的库存数量
-    const [total, used, available, expired] = await Promise.all([
-      this.getCount(productId, {}), // 总数
-      this.getCount(productId, { isUsed: true }), // 已使用
-      this.getCount(productId, { isUsed: false, notExpired: true }), // 可用（未过期）
-      this.getCount(productId, { expired: true }), // 过期
-    ])
+    // 使用与 getBatchInventoryStats 相同的聚合查询逻辑
+    const result = await db
+      .select({
+        total: count(schema.inventoryText.id),
+        used: sql<number>`COUNT(CASE WHEN ${schema.inventoryText.isUsed} = 1 THEN 1 END)`,
+        available: sql<number>`COUNT(CASE WHEN ${schema.inventoryText.isUsed} = 0 AND (${schema.inventoryText.expiresAt} IS NULL OR ${schema.inventoryText.expiresAt} > datetime('now')) THEN 1 END)`,
+        expired: sql<number>`COUNT(CASE WHEN ${schema.inventoryText.isUsed} = 0 AND ${schema.inventoryText.expiresAt} IS NOT NULL AND ${schema.inventoryText.expiresAt} <= datetime('now') THEN 1 END)`,
+      })
+      .from(schema.inventoryText)
+      .where(eq(schema.inventoryText.productId, productId))
+
+    const stats = result[0] || { total: 0, used: 0, available: 0, expired: 0 }
 
     return {
-      total,
-      used,
-      available,
-      expired,
-      usageRate: total > 0 ? (used / total) * 100 : 0,
+      total: stats.total,
+      used: stats.used,
+      available: stats.available,
+      expired: stats.expired,
+      usageRate: stats.total > 0 ? (stats.used / stats.total) * 100 : 0,
     }
   }
 
@@ -456,6 +454,57 @@ export class InventoryService {
         hasPrev: page > 1,
       }
     }
+  }
+
+  /**
+   * 批量获取多个商品的库存统计（解决 N+1 查询问题）
+   */
+  async getBatchInventoryStats(productIds: number[]) {
+    if (productIds.length === 0) {
+      return new Map()
+    }
+
+    // 使用单次查询获取所有商品的库存统计
+    const stats = await db
+      .select({
+        productId: schema.inventoryText.productId,
+        total: count(schema.inventoryText.id),
+        used: sql<number>`COUNT(CASE WHEN ${schema.inventoryText.isUsed} = 1 THEN 1 END)`,
+        available: sql<number>`COUNT(CASE WHEN ${schema.inventoryText.isUsed} = 0 AND (${schema.inventoryText.expiresAt} IS NULL OR ${schema.inventoryText.expiresAt} > datetime('now')) THEN 1 END)`,
+        expired: sql<number>`COUNT(CASE WHEN ${schema.inventoryText.isUsed} = 0 AND ${schema.inventoryText.expiresAt} IS NOT NULL AND ${schema.inventoryText.expiresAt} <= datetime('now') THEN 1 END)`,
+      })
+      .from(schema.inventoryText)
+      .where(
+        inArray(schema.inventoryText.productId, productIds)
+      )
+      .groupBy(schema.inventoryText.productId)
+
+    // 转换为 Map 格式便于查找
+    const statsMap = new Map()
+    stats.forEach(stat => {
+      statsMap.set(stat.productId, {
+        total: stat.total,
+        used: stat.used,
+        available: stat.available,
+        expired: stat.expired,
+        usageRate: stat.total > 0 ? (stat.used / stat.total) * 100 : 0,
+      })
+    })
+
+    // 确保所有商品都有统计信息（即使没有库存）
+    productIds.forEach(productId => {
+      if (!statsMap.has(productId)) {
+        statsMap.set(productId, {
+          total: 0,
+          used: 0,
+          available: 0,
+          expired: 0,
+          usageRate: 0,
+        })
+      }
+    })
+
+    return statsMap
   }
 
   /**

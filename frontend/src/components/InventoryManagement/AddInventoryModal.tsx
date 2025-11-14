@@ -20,6 +20,7 @@ export default function AddInventoryModal({ isOpen, onClose, onSuccess }: AddInv
   const [priority, setPriority] = useState<number>(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
   useEffect(() => {
     if (isOpen) {
@@ -28,6 +29,7 @@ export default function AddInventoryModal({ isOpen, onClose, onSuccess }: AddInv
       setBatchName('')
       setPriority(0)
       setError('')
+      setSuccess('')
       setProductId(0)
     }
   }, [isOpen])
@@ -78,19 +80,43 @@ export default function AddInventoryModal({ isOpen, onClose, onSuccess }: AddInv
     }
 
     setError('')
+    setSuccess('')
     setLoading(true)
 
     try {
-      await addInventory({
+      const result = await addInventory({
         productId,
         content: content.trim(),
         batchName: batchName.trim() || undefined,
         priority,
       })
 
-      onSuccess()
+      // 显示成功消息
+      setSuccess(`成功添加 ${result.count} 项库存`)
+
+      // 2秒后自动关闭模态框
+      setTimeout(() => {
+        onSuccess()
+        onClose()
+      }, 2000)
+
     } catch (err: any) {
-      setError(err.message || '添加失败')
+      // 改进错误处理，提供更友好的错误信息
+      let errorMessage = '添加失败'
+
+      if (err.message.includes('413')) {
+        errorMessage = '文件过大，请选择小于10MB的文件'
+      } else if (err.message.includes('400')) {
+        errorMessage = '请求参数错误，请检查输入'
+      } else if (err.message.includes('401')) {
+        errorMessage = '登录已过期，请重新登录'
+      } else if (err.message.includes('404')) {
+        errorMessage = '商品不存在，请重新选择'
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -228,10 +254,17 @@ export default function AddInventoryModal({ isOpen, onClose, onSuccess }: AddInv
           )}
         </div>
 
+        {/* 成功提示 */}
+        {success && (
+          <div className="mt-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-md text-sm">
+            ✅ {success}
+          </div>
+        )}
+
         {/* 错误提示 */}
         {error && (
           <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
-            {error}
+            ❌ {error}
           </div>
         )}
 
@@ -239,17 +272,26 @@ export default function AddInventoryModal({ isOpen, onClose, onSuccess }: AddInv
         <div className="mt-6 flex justify-end space-x-3">
           <button
             onClick={onClose}
-            disabled={loading}
+            disabled={loading || success}
             className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50"
           >
             取消
           </button>
           <button
             onClick={handleAdd}
-            disabled={loading || !productId || !content.trim()}
-            className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50"
+            disabled={loading || success || !productId || !content.trim()}
+            className={`px-4 py-2 rounded-md disabled:opacity-50 ${
+              success
+                ? 'bg-green-600 text-white'
+                : 'bg-green-500 text-white hover:bg-green-600'
+            }`}
           >
-            {loading ? '添加中...' : '添加库存'}
+            {loading
+              ? '添加中...'
+              : success
+                ? '✓ 添加成功'
+                : '添加库存'
+            }
           </button>
         </div>
       </div>

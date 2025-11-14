@@ -4,6 +4,7 @@ import { productService } from '../services/product-service'
 import { inventoryService } from '../services/inventory-service'
 import { adminAuth } from '../middleware/admin-jwt-auth'
 import { getClientIP, sanitizeForLog } from '../utils/auth'
+import { successResponse, errors } from '../utils/response'
 import { AdminEventType, AdminEventCategory } from '../db/schema'
 
 const app = new Hono()
@@ -49,6 +50,15 @@ app.get('/inventory', adminAuth, async (c) => {
     const search = c.req.query('search') || ''
     const status = c.req.query('status') || 'all'
 
+    console.log('📊 [库存管理] 获取库存列表', {
+      admin: admin.username,
+      page,
+      limit,
+      search: search || '无',
+      status,
+      timestamp: new Date().toISOString()
+    })
+
     // 构建查询条件
     const query: any = {
       page,
@@ -64,67 +74,74 @@ app.get('/inventory', adminAuth, async (c) => {
     const productsResult = await productService.queryProducts(query)
     const { products, pagination } = productsResult
 
+    // 批量获取所有商品的库存统计信息（解决 N+1 查询问题）
+    const productIds = products.map(p => p.id)
+    const inventoryStatsMap = await inventoryService.getBatchInventoryStats(productIds)
+
     // 为每个商品添加库存统计信息
-    const productsWithInventory = await Promise.all(
-      products.map(async (product) => {
-        const inventoryStats = await inventoryService.getInventoryStats(product.id)
+    const productsWithInventory = products.map((product) => {
+      const inventoryStats = inventoryStatsMap.get(product.id) || {
+        total: 0,
+        used: 0,
+        available: 0,
+        expired: 0,
+        usageRate: 0,
+      }
 
-        // 计算库存状态
-        let inventoryStatus = 'in_stock'
-        let statusMessage = '库存充足'
+      // 计算库存状态
+      let inventoryStatus = 'in_stock'
+      let statusMessage = '库存充足'
 
-        if (inventoryStats.available === 0) {
-          inventoryStatus = 'out_of_stock'
-          statusMessage = '已售罄'
-        } else if (inventoryStats.available <= 10) {
-          inventoryStatus = 'low_stock'
-          statusMessage = '库存偏低'
+      if (inventoryStats.available === 0) {
+        inventoryStatus = 'out_of_stock'
+        statusMessage = '已售罄'
+      } else if (inventoryStats.available <= 10) {
+        inventoryStatus = 'low_stock'
+        statusMessage = '库存偏低'
+      }
+
+      // 根据查询参数过滤状态
+      if (status !== 'all') {
+        if (status === 'in_stock' && inventoryStatus !== 'in_stock') {
+          return null
         }
-
-        // 根据查询参数过滤状态
-        if (status !== 'all') {
-          if (status === 'in_stock' && inventoryStatus !== 'in_stock') {
-            return null
-          }
-          if (status === 'low_stock' && inventoryStatus !== 'low_stock') {
-            return null
-          }
-          if (status === 'out_of_stock' && inventoryStatus !== 'out_of_stock') {
-            return null
-          }
+        if (status === 'low_stock' && inventoryStatus !== 'low_stock') {
+          return null
         }
-
-        return {
-          productId: product.id,
-          productName: product.name,
-          productDescription: product.description,
-          deliveryType: product.deliveryType,
-          total: inventoryStats.total,
-          available: inventoryStats.available,
-          used: inventoryStats.used,
-          status: inventoryStatus,
-          statusMessage,
-          lastUpdated: new Date().toISOString(),
+        if (status === 'out_of_stock' && inventoryStatus !== 'out_of_stock') {
+          return null
         }
-      })
-    )
+      }
+
+      return {
+        productId: product.id,
+        productName: product.name,
+        productDescription: product.description,
+        deliveryType: product.deliveryType,
+        total: inventoryStats.total,
+        available: inventoryStats.available,
+        used: inventoryStats.used,
+        status: inventoryStatus,
+        statusMessage,
+        lastUpdated: new Date().toISOString(),
+      }
+    })
 
     // 过滤掉 null 值
     const filteredProducts = productsWithInventory.filter(p => p !== null)
 
-    return c.json({
-      success: true,
-      data: {
-        products: filteredProducts,
-        pagination,
-      },
+    return successResponse(c, {
+      products: filteredProducts,
+      pagination,
     })
   } catch (error: any) {
     console.error('获取库存列表失败:', error)
-    return c.json(
-      { success: false, error: '获取库存列表失败' },
-      500
-    )
+    return errors.INTERNAL_ERROR(c, '获取库存列表失败', {
+      ...(process.env.NODE_ENV === 'development' && {
+        stack: error.stack,
+        details: error.message
+      })
+    })
   }
 })
 
@@ -140,13 +157,13 @@ app.get('/inventory/:productId', adminAuth, async (c) => {
     const status = c.req.query('status') || 'all'
 
     if (!productId || isNaN(productId)) {
-      return c.json({ success: false, error: '无效的商品ID' }, 400)
+      return errors.INVALID_REQUEST(c, '无效的商品ID')
     }
 
     // 获取商品信息
     const products = await productService.getProductById(productId)
     if (!products) {
-      return c.json({ success: false, error: '商品不存在' }, 404)
+      return errors.PRODUCT_NOT_FOUND(c)
     }
 
     // 构建查询条件
@@ -168,29 +185,28 @@ app.get('/inventory/:productId', adminAuth, async (c) => {
     // 获取库存统计
     const stats = await inventoryService.getInventoryStats(productId)
 
-    return c.json({
-      success: true,
-      data: {
-        product: {
-          id: products.id,
-          name: products.name,
-          deliveryType: products.deliveryType,
-        },
-        inventory: items,
-        summary: {
-          total: stats.total,
-          available: stats.available,
-          used: stats.used,
-        },
-        pagination,
+    return successResponse(c, {
+      product: {
+        id: products.id,
+        name: products.name,
+        deliveryType: products.deliveryType,
       },
+      inventory: items,
+      summary: {
+        total: stats.total,
+        available: stats.available,
+        used: stats.used,
+      },
+      pagination,
     })
   } catch (error: any) {
     console.error('获取库存详情失败:', error)
-    return c.json(
-      { success: false, error: '获取库存详情失败' },
-      500
-    )
+    return errors.INTERNAL_ERROR(c, '获取库存详情失败', {
+      ...(process.env.NODE_ENV === 'development' && {
+        stack: error.stack,
+        details: error.message
+      })
+    })
   }
 })
 
@@ -206,7 +222,7 @@ app.post('/inventory/import', adminAuth, async (c) => {
     // 验证商品是否存在
     const product = await productService.getProductById(productId)
     if (!product) {
-      return c.json({ success: false, error: '商品不存在' }, 404)
+      return errors.PRODUCT_NOT_FOUND(c)
     }
 
     const importResult = await inventoryService.importInventory(productId, content, {
@@ -220,30 +236,26 @@ app.post('/inventory/import', adminAuth, async (c) => {
     const successCount = importResult.length
     const failedCount = 0 // 当前的实现不会失败（如果失败会抛出异常）
 
-    return c.json({
+    return successResponse(c, {
       success: true,
-      data: {
-        success: true,
-        total: lines.length,
-        successCount,
-        failedCount,
-        errors: [],
-      },
+      total: lines.length,
+      successCount,
+      failedCount,
+      errors: [],
     })
   } catch (error: any) {
     console.error('导入库存失败:', error)
 
     if (error instanceof z.ZodError) {
-      return c.json(
-        { success: false, error: '参数验证失败', details: error.errors },
-        400
-      )
+      return errors.VALIDATION_ERROR(c, '参数验证失败', error.errors)
     }
 
-    return c.json(
-      { success: false, error: error.message || '导入库存失败' },
-      500
-    )
+    return errors.INTERNAL_ERROR(c, error.message || '导入库存失败', {
+      ...(process.env.NODE_ENV === 'development' && {
+        stack: error.stack,
+        details: error.message
+      })
+    })
   }
 })
 
@@ -256,16 +268,25 @@ app.post('/inventory', adminAuth, async (c) => {
     const body = await c.req.json()
     const { productId, content, batchName, priority } = importInventorySchema.parse(body)
 
+    const lines = content.split('\n').filter(line => line.trim().length > 0)
+
+    console.log('➕ [库存管理] 开始添加库存', {
+      admin: admin.username,
+      productId,
+      linesCount: lines.length,
+      batchName: batchName || `manual_${Date.now()}`,
+      priority: priority || 0,
+      timestamp: new Date().toISOString()
+    })
+
     // 验证商品是否存在
     const product = await productService.getProductById(productId)
     if (!product) {
-      return c.json({ success: false, error: '商品不存在' }, 404)
+      return errors.PRODUCT_NOT_FOUND(c)
     }
 
-    const lines = content.split('\n').filter(line => line.trim().length > 0)
-
     if (lines.length === 0) {
-      return c.json({ success: false, error: '没有有效的库存内容' }, 400)
+      return errors.INVALID_REQUEST(c, '没有有效的库存内容')
     }
 
     const result = await inventoryService.addInventoryBatch(productId, lines, {
@@ -274,26 +295,31 @@ app.post('/inventory', adminAuth, async (c) => {
       priority: priority || 0,
     })
 
-    return c.json({
-      success: true,
-      data: {
-        count: result.length,
-      },
+    console.log('✅ [库存管理] 添加库存成功', {
+      admin: admin.username,
+      productId,
+      addedCount: result.length,
+      batchName: batchName || `manual_${Date.now()}`,
+      duration: Date.now() - Date.now(),
+      timestamp: new Date().toISOString()
+    })
+
+    return successResponse(c, {
+      count: result.length,
     })
   } catch (error: any) {
     console.error('添加库存失败:', error)
 
     if (error instanceof z.ZodError) {
-      return c.json(
-        { success: false, error: '参数验证失败', details: error.errors },
-        400
-      )
+      return errors.VALIDATION_ERROR(c, '参数验证失败', error.errors)
     }
 
-    return c.json(
-      { success: false, error: error.message || '添加库存失败' },
-      500
-    )
+    return errors.INTERNAL_ERROR(c, error.message || '添加库存失败', {
+      ...(process.env.NODE_ENV === 'development' && {
+        stack: error.stack,
+        details: error.message
+      })
+    })
   }
 })
 
@@ -308,7 +334,7 @@ app.delete('/inventory/:productId/items', adminAuth, async (c) => {
     const { itemIds } = deleteInventorySchema.parse(body)
 
     if (!productId || isNaN(productId)) {
-      return c.json({ success: false, error: '无效的商品ID' }, 400)
+      return errors.INVALID_REQUEST(c, '无效的商品ID')
     }
 
     let deletedCount = 0
@@ -321,26 +347,22 @@ app.delete('/inventory/:productId/items', adminAuth, async (c) => {
       }
     }
 
-    return c.json({
-      success: true,
-      data: {
-        deletedCount,
-      },
+    return successResponse(c, {
+      deletedCount,
     })
   } catch (error: any) {
     console.error('删除库存失败:', error)
 
     if (error instanceof z.ZodError) {
-      return c.json(
-        { success: false, error: '参数验证失败', details: error.errors },
-        400
-      )
+      return errors.VALIDATION_ERROR(c, '参数验证失败', error.errors)
     }
 
-    return c.json(
-      { success: false, error: error.message || '删除库存失败' },
-      500
-    )
+    return errors.INTERNAL_ERROR(c, error.message || '删除库存失败', {
+      ...(process.env.NODE_ENV === 'development' && {
+        stack: error.stack,
+        details: error.message
+      })
+    })
   }
 })
 
@@ -359,9 +381,19 @@ app.get('/inventory/stats', adminAuth, async (c) => {
     let outOfStockProducts = 0
     const recentImports: any[] = []
 
-    // 为每个商品计算库存统计
+    // 批量获取所有商品的库存统计（解决 N+1 查询问题）
+    const productIds = allProducts.products.map(p => p.id)
+    const inventoryStatsMap = await inventoryService.getBatchInventoryStats(productIds)
+
+    // 计算总体统计
     for (const product of allProducts.products) {
-      const stats = await inventoryService.getInventoryStats(product.id)
+      const stats = inventoryStatsMap.get(product.id) || {
+        total: 0,
+        used: 0,
+        available: 0,
+        expired: 0,
+        usageRate: 0,
+      }
 
       totalInventoryItems += stats.total
       availableItems += stats.available
@@ -404,24 +436,23 @@ app.get('/inventory/stats', adminAuth, async (c) => {
       .slice(0, 5)
       .forEach(batch => recentImports.push(batch))
 
-    return c.json({
-      success: true,
-      data: {
-        totalProducts: allProducts.products.length,
-        totalInventoryItems,
-        availableItems,
-        usedItems,
-        lowStockProducts,
-        outOfStockProducts,
-        recentImports,
-      },
+    return successResponse(c, {
+      totalProducts: allProducts.products.length,
+      totalInventoryItems,
+      availableItems,
+      usedItems,
+      lowStockProducts,
+      outOfStockProducts,
+      recentImports,
     })
   } catch (error: any) {
     console.error('获取库存统计失败:', error)
-    return c.json(
-      { success: false, error: '获取库存统计失败' },
-      500
-    )
+    return errors.INTERNAL_ERROR(c, '获取库存统计失败', {
+      ...(process.env.NODE_ENV === 'development' && {
+        stack: error.stack,
+        details: error.message
+      })
+    })
   }
 })
 

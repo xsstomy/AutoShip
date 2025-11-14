@@ -562,20 +562,10 @@ export async function getDatabaseStats() {
   }
 }
 
-// 事务辅助函数
-export async function withTransaction<T>(callback: () => Promise<T>): Promise<T> {
-  const transaction = db.transaction(() => {
-    // 由于better-sqlite3的限制，我们需要同步执行
-    // 这里我们使用一个简单的同步事务包装器
-    throw new Error('Transaction wrapper not implemented for better-sqlite3')
-  })
-
-  try {
-    return await callback()
-  } catch (error) {
-    console.error('Operation failed:', error)
-    throw error
-  }
+// 事务辅助函数 - 正确的异步事务实现
+export async function withTransaction<T>(callback: (tx: typeof db) => Promise<T>): Promise<T> {
+  // Drizzle 事务本身返回 Promise，不需要额外的 await 包装
+  return db.transaction(callback)
 }
 
 // 基础CRUD操作封装

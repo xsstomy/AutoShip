@@ -366,6 +366,9 @@ export default function AdminInventoryManagement() {
           setInventoryDetail(null)
         }}
         onDeleteSuccess={() => {
+          // 先刷新列表页面数据，确保显示最新库存数量
+          fetchInventory()
+          // 然后刷新详情页面数据
           if (selectedProduct) {
             handleViewDetail(selectedProduct)
           }
