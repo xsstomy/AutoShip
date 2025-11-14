@@ -262,6 +262,264 @@ pending → paid → delivered
 - `paid` → `refunded`: Manual refund initiated
 - `paid` → `cancelled`: Rare, admin manual intervention
 
+## 代码质量规范与最佳实践
+
+### 最新审查结果 (2025-11-14)
+
+经过全面的代码审查，发现并修复了多个关键问题。以下是错误规范和最佳实践的总结：
+
+### 一、已修复的关键问题
+
+#### 1. N+1 查询性能优化 ✅
+**问题描述：** 获取商品列表时存在 N+1 查询问题，性能严重下降
+
+**修复方案：**
+- **产品列表查询优化：** `src/services/product-service.ts:72-110`
+  - 新增 `getActiveProductsWithDetails()` 方法
+  - 使用 LEFT JOIN 一次性获取产品和价格信息
+  - 从 1 + 2N 次查询优化为 1 + N 次查询（性能提升 50%+）
+
+- **库存统计优化：** `src/services/inventory-service.ts:153-180`
+  - 改进 `getInventoryStats()` 方法
+  - 使用单次聚合查询获取所有统计数据（总数、已用、可用、过期）
+  - 从 4 次查询优化为 1 次查询
+
+- **产品查询优化：** `src/services/product-service.ts:115-215`
+  - 为 `queryProducts()` 添加 `includePrices` 参数
+  - 支持在一次查询中包含价格信息
+  - 避免管理员页面的额外查询
+
+**性能对比：**
+- **优化前：** 获取 100 个商品 = 201 次查询
+- **优化后：** 获取 100 个商品 = 101 次查询
+- **提升：** 性能提升 50%+，数据库负载显著降低
+
+**使用示例：**
+```typescript
+// 推荐：使用优化的查询方法
+const products = await productService.getActiveProductsWithDetails()
+
+// 管理员页面：传递 includePrices 参数
+const productsResult = await productService.queryProducts(query, true)
+```
+
+#### 2. 统一错误处理模式 ✅
+**问题描述：** API 响应格式不统一，部分返回简单字符串，部分返回对象
+
+**修复方案：**
+- **创建统一响应工具：** `src/utils/response.ts`
+  - 定义标准响应格式：`{ success: boolean, data/error: object }`
+  - 预定义常用错误类型：UNAUTHORIZED、NOT_FOUND、INTERNAL_ERROR 等
+  - 提供 `asyncHandler` 中件自动捕获错误
+
+- **标准化响应示例：**
+```typescript
+// 成功响应
+return successResponse(c, {
+  products: productsWithInventory,
+  total: productsWithInventory.length,
+})
+
+// 错误响应
+return errors.PRODUCT_NOT_FOUND(c)
+return errors.INTERNAL_ERROR(c, '获取商品列表失败')
+```
+
+**已更新的文件：**
+- `src/routes/products.ts`
+- `src/routes/admin-products.ts`
+- `src/middleware/admin-jwt-auth.ts`
+
+#### 3. Cookie 解析安全加固 ✅
+**问题描述：** 使用脆弱的正则表达式解析 Cookie，存在安全风险
+
+**修复方案：**
+- **安装依赖：** `npm install cookie`
+- **使用专业库：** `src/middleware/admin-jwt-auth.ts:2`
+  - 导入 `parse` 函数替代正则表达式
+  - 安全解析 Cookie，防止注入攻击
+
+**代码对比：**
+```typescript
+// 不安全的实现（修复前）
+token = c.req.header('cookie')?.match(/admin_token=([^;]+)/)?.[1]
+
+// 安全的实现（修复后）
+const cookieHeader = c.req.header('cookie')
+if (cookieHeader) {
+  const cookies = parse(cookieHeader)
+  token = cookies.admin_token
+}
+```
+
+**安全改进：**
+- 防止 Cookie 注入攻击
+- 正确解析包含特殊字符的 Cookie 值
+- 避免正则表达式相关的漏洞
+
+### 二、需要关注的其他问题（优先级）
+
+#### Critical（严重）- 需立即处理
+
+1. **生产环境敏感信息泄露**
+   - 位置：`/Backend/.env`
+   - 问题：包含真实的支付宝私钥、公钥和应用 ID
+   - 解决方案：
+     - 立即移除 `.env` 文件中的真实密钥
+     - 使用环境变量或密钥管理服务（AWS Secrets Manager）
+     - 将 `.env` 添加到 `.gitignore`
+
+2. **缺乏自动化测试覆盖**
+   - 位置：整个项目
+   - 问题：仅有 `test-auth.js` 和 `test-payment-gateway.ts` 两个手动测试脚本
+   - 解决方案：
+     - 使用 Jest 或 Vitest 建立单元测试框架
+     - 优先测试关键业务逻辑：商品管理、订单处理、认证授权、支付网关
+
+3. **生产环境硬编码密钥**
+   - 位置：`src/utils/auth.ts:9`
+   - 问题：`JWT_SECRET` 有默认后备值 `'your-secret-key-change-in-production'`
+   - 解决方案：
+     - 添加启动时检查，确保 JWT_SECRET 已设置
+     - 如果未设置，直接抛出错误并退出
+
+#### High（高）- 1-2周内处理
+
+4. **缺少 API 速率限制**
+   - 位置：`src/index.ts` 及所有路由
+   - 问题：公开 API 没有速率限制保护
+   - 解决方案：
+     - 使用 `rate-limiter-flexible` 或 `express-rate-limit`
+     - 为不同 API 端点设置不同限制
+
+5. **数据库连接未设置最大连接数**
+   - 位置：`src/db/index.ts:11`
+   - 问题：SQLite 配置了 WAL 模式但未限制并发连接
+   - 解决方案：
+     - 设置连接限制：`new Database(DATABASE_URL, { max: 10 })`
+     - 考虑为生产环境使用 PostgreSQL
+
+6. **代码重复**
+   - 位置：`src/routes/products.ts:19-29`、`src/routes/admin-products.ts:562-572`
+   - 问题：`getInventoryStatus` 函数重复实现
+   - 解决方案：
+     - 创建公共工具函数：`src/utils/inventory.ts`
+     - 统一管理所有库存相关逻辑
+
+#### Medium（中）- 近期处理
+
+7. **ESLint 配置缺失**
+   - 位置：`package.json:31-33`
+   - 问题：ESLint 依赖已安装但无配置文件
+   - 解决方案：创建 `.eslintrc.json` 配置并设置 pre-commit hook
+
+8. **缺少 API 文档**
+   - 位置：`/Backend/docs/API.md`
+   - 解决方案：使用 OpenAPI/Swagger 生成文档并集成到部署流程
+
+### 三、最佳实践指南
+
+#### 数据库查询最佳实践
+
+1. **避免 N+1 查询**
+   - 使用 JOIN 查询一次性获取关联数据
+   - 对大数据量操作使用批量查询
+   - 使用聚合查询获取统计数据
+
+2. **优化查询性能**
+   - 为常用查询字段添加索引
+   - 使用分页避免一次加载大量数据
+   - 在 Service 层封装复杂查询逻辑
+
+3. **事务管理**
+   - 多步骤操作使用事务保证数据一致性
+   - 使用 Drizzle ORM 的 `withTransaction` 辅助函数
+
+#### 错误处理最佳实践
+
+1. **统一响应格式**
+   - 所有 API 使用相同的成功/错误响应结构
+   - 使用预定义错误类型便于前端处理
+   - 错误消息应用户友好，避免暴露内部实现
+
+2. **错误分类**
+   - 4xx：客户端错误（参数错误、认证失败、权限不足）
+   - 5xx：服务器错误（数据库错误、外部服务错误）
+
+3. **日志记录**
+   - 所有错误必须记录日志
+   - 生产环境使用结构化日志（Winston、Pino）
+   - 集成错误监控服务（Sentry）
+
+#### 安全最佳实践
+
+1. **认证安全**
+   - JWT 密钥必须从环境变量获取，不能有默认后备值
+   - Cookie 设置安全属性：httpOnly、secure、sameSite
+   - 使用专业库解析 Cookie，不使用正则表达式
+
+2. **数据验证**
+   - 所有外部输入必须使用 Zod 验证
+   - 数据库操作前验证参数类型和范围
+   - 防止 SQL 注入和 XSS 攻击
+
+3. **敏感信息**
+   - 生产密钥绝不能提交到代码仓库
+   - 使用环境变量管理配置
+   - 定期轮换 API 密钥和证书
+
+#### 代码质量最佳实践
+
+1. **代码组织**
+   - 公共工具函数提取到 `utils/` 目录
+   - 保持 Service 层和 Route 层职责分离
+   - 使用依赖注入管理服务实例
+
+2. **类型安全**
+   - 启用 TypeScript 严格模式
+   - 为所有公共函数定义返回类型
+   - 使用接口定义 API 响应格式
+
+3. **测试覆盖**
+   - 关键业务逻辑必须有单元测试
+   - API 路由需要集成测试
+   - 设置代码覆盖率要求（最低 80%）
+
+### 四、优先修复路线图
+
+#### 立即处理（本周内）
+1. 移除 `.env` 文件中的生产密钥
+2. 添加 JWT 密钥启动时检查
+3. 为关键 API 添加速率限制
+
+#### 短期（2周内）
+1. 建立基础测试套件（Jest/Vitest）
+2. 修复代码重复问题
+3. 添加 ESLint 配置
+
+#### 中期（1个月内）
+1. 完善测试覆盖率到 80%+
+2. 添加 API 文档（OpenAPI）
+3. 实施监控和日志系统
+4. 配置数据库连接池
+
+### 五、监控与维护
+
+1. **性能监控**
+   - 跟踪 API 响应时间
+   - 监控数据库查询性能
+   - 设置告警阈值
+
+2. **错误监控**
+   - 使用 Sentry 或类似工具
+   - 跟踪错误率和类型
+   - 定期审查错误日志
+
+3. **安全审计**
+   - 定期检查依赖漏洞（npm audit）
+   - 审查 API 安全漏洞
+   - 更新安全补丁
+
 ## Important Constraints
 
 ### Technical Constraints

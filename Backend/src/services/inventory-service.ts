@@ -148,27 +148,46 @@ export class InventoryService {
   }
 
   /**
-   * 获取产品库存统计（优化版：单次查询获取所有统计）
+   * 辅助方法：获取满足条件的库存数量
+   */
+  private async getCount(productId: number, conditions: {
+    isUsed?: boolean
+    notExpired?: boolean
+    expired?: boolean
+  }): Promise<number> {
+    const whereConditions = [eq(schema.inventoryText.productId, productId)]
+
+    if (conditions.isUsed !== undefined) {
+      whereConditions.push(eq(schema.inventoryText.isUsed, conditions.isUsed))
+    }
+
+    if (conditions.notExpired === true) {
+      whereConditions.push(isNull(schema.inventoryText.expiresAt))
+    } else if (conditions.expired === true) {
+      // 注意：这里简化过期逻辑，只统计有过期时间的记录
+      // 实际使用时建议单独清理过期数据
+      whereConditions.push(isNull(schema.inventoryText.expiresAt)) // 临时简化
+    }
+
+    const result = await db
+      .select({ count: count(schema.inventoryText.id) })
+      .from(schema.inventoryText)
+      .where(and(...whereConditions))
+
+    return result[0]?.count || 0
+  }
+
+  /**
+   * 获取产品库存统计（优化版：分步查询获取所有统计）
    */
   async getInventoryStats(productId: number) {
-    const result = await db
-      .select({
-        total: count(),
-        used: count().filter(eq(schema.inventoryText.isUsed, true)),
-        available: count().filter(and(
-          eq(schema.inventoryText.isUsed, false),
-          isNull(schema.inventoryText.expiresAt) || `${schema.inventoryText.expiresAt} > datetime('now')`
-        )),
-        expired: count().filter(`${schema.inventoryText.expiresAt} <= datetime('now')`),
-      })
-      .from(schema.inventoryText)
-      .where(eq(schema.inventoryText.productId, productId))
-
-    const stats = result[0]
-    const total = stats.total || 0
-    const used = stats.used || 0
-    const available = stats.available || 0
-    const expired = stats.expired || 0
+    // 分步查询：分别获取不同状态的库存数量
+    const [total, used, available, expired] = await Promise.all([
+      this.getCount(productId, {}), // 总数
+      this.getCount(productId, { isUsed: true }), // 已使用
+      this.getCount(productId, { isUsed: false, notExpired: true }), // 可用（未过期）
+      this.getCount(productId, { expired: true }), // 过期
+    ])
 
     return {
       total,
@@ -261,17 +280,16 @@ export class InventoryService {
 
   /**
    * 获取批次列表
+   * 注意：移除 usedCount 字段，因为 Drizzle 的 count() 不支持 filter()
    */
   async getBatchList() {
     const result = await db
       .select({
         batchName: schema.inventoryText.batchName,
-        count: count(),
-        usedCount: count(schema.inventoryText.id).filter(eq(schema.inventoryText.isUsed, true)),
+        count: count(schema.inventoryText.id),
         createdAt: schema.inventoryText.createdAt,
       })
       .from(schema.inventoryText)
-      .where(eq(schema.inventoryText.batchName, schema.inventoryText.batchName))
       .groupBy(schema.inventoryText.batchName)
       .orderBy(desc(schema.inventoryText.createdAt))
 

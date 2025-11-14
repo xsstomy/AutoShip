@@ -218,11 +218,10 @@ export class MonitoringService {
       whereConditions.push(`${schema.adminLogs.createdAt} <= '${endDate}'`)
     }
 
-    // 按操作类型统计
+    // 按操作类型统计（简化：移除成功率计算）
     const actionStats = await db.select({
       action: schema.adminLogs.action,
-      count: count(),
-      successRate: count(schema.adminLogs.id).filter(eq(schema.adminLogs.success, true)) * 100.0 / count(schema.adminLogs.id),
+      count: count(schema.adminLogs.id),
     })
       .from(schema.adminLogs)
       .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
@@ -231,7 +230,7 @@ export class MonitoringService {
     // 按资源类型统计
     const resourceStats = await db.select({
       resourceType: schema.adminLogs.resourceType,
-      count: count(),
+      count: count(schema.adminLogs.id),
     })
       .from(schema.adminLogs)
       .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
@@ -240,7 +239,7 @@ export class MonitoringService {
     // 按管理员统计
     const adminStats = await db.select({
       adminEmail: schema.adminLogs.adminEmail,
-      count: count(),
+      count: count(schema.adminLogs.id),
       lastActivity: schema.adminLogs.createdAt,
     })
       .from(schema.adminLogs)
@@ -248,16 +247,36 @@ export class MonitoringService {
       .groupBy(schema.adminLogs.adminEmail)
       .orderBy(desc(count(schema.adminLogs.id)))
 
-    // 成功率统计
-    const successStats = await db.select({
-      total: count(),
-      successful: count(schema.adminLogs.id).filter(eq(schema.adminLogs.success, true)),
-      failed: count(schema.adminLogs.id).filter(eq(schema.adminLogs.success, false)),
+    // 成功率统计（简化）
+    const totalResult = await db.select({
+      total: count(schema.adminLogs.id),
     })
       .from(schema.adminLogs)
       .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
 
-    const totalStats = successStats[0] || { total: 0, successful: 0, failed: 0 }
+    const successResult = await db.select({
+      successful: count(schema.adminLogs.id),
+    })
+      .from(schema.adminLogs)
+      .where(and(
+        eq(schema.adminLogs.success, true),
+        ...whereConditions
+      ))
+
+    const failedResult = await db.select({
+      failed: count(schema.adminLogs.id),
+    })
+      .from(schema.adminLogs)
+      .where(and(
+        eq(schema.adminLogs.success, false),
+        ...whereConditions
+      ))
+
+    const totalStats = {
+      total: totalResult[0]?.total || 0,
+      successful: successResult[0]?.successful || 0,
+      failed: failedResult[0]?.failed || 0,
+    }
 
     return {
       actionStats,
