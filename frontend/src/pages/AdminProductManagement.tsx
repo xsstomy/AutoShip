@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import ProductStatusBadge from '../components/ProductStatusBadge'
@@ -440,14 +440,6 @@ export default function AdminProductManagement() {
     selectedCount: 0
   })
 
-  useEffect(() => {
-    if (!admin) {
-      navigate('/admin/login')
-      return
-    }
-    fetchProducts()
-  }, [admin, navigate, page, filterActive])
-
   const fetchProducts = async () => {
     setLoading(true)
     setError('')
@@ -496,6 +488,28 @@ export default function AdminProductManagement() {
     }
   }
 
+  // 初始加载和页面/筛选变化时的加载
+  useEffect(() => {
+    if (!admin) {
+      navigate('/admin/login')
+      return
+    }
+    fetchProducts()
+  }, [admin, navigate, page, filterActive])
+
+  // 监听搜索词变化，自动触发搜索（带防抖）
+  useEffect(() => {
+    const delayedSearch = setTimeout(() => {
+      if (page === 1) {
+        fetchProducts()
+      } else {
+        setPage(1)
+      }
+    }, 500)
+
+    return () => clearTimeout(delayedSearch)
+  }, [searchTerm])
+
   const handleEditPrice = (product: Product) => {
     setEditingProduct(product)
     setShowEditModal(true)
@@ -527,9 +541,13 @@ export default function AdminProductManagement() {
       // 刷新商品列表
       fetchProducts()
 
-      alert('价格更新成功！')
+      // 显示成功消息
+      setSuccessMessage('价格更新成功！')
+      setTimeout(() => {
+        setSuccessMessage('')
+      }, 3000)
     } catch (err: any) {
-      alert(err.message || '更新价格失败')
+      setError(err.message || '更新价格失败')
       console.error('Error saving price:', err)
     } finally {
       setSavingPrice(false)
@@ -569,9 +587,13 @@ export default function AdminProductManagement() {
       // 刷新商品列表
       fetchProducts()
 
-      alert('商品创建成功！')
+      // 显示成功消息
+      setSuccessMessage('商品创建成功！')
+      setTimeout(() => {
+        setSuccessMessage('')
+      }, 3000)
     } catch (err: any) {
-      alert(err.message || '创建商品失败')
+      setError(err.message || '创建商品失败')
       console.error('Error creating product:', err)
       throw err
     } finally {
@@ -643,7 +665,7 @@ export default function AdminProductManagement() {
       // 刷新商品列表
       fetchProducts()
     } catch (err: any) {
-      alert(err.message || '更新商品状态失败')
+      setError(err.message || '更新商品状态失败')
       console.error('Error updating product status:', err)
     } finally {
       setUpdatingStatus(false)
@@ -737,7 +759,7 @@ export default function AdminProductManagement() {
       // 刷新商品列表
       fetchProducts()
     } catch (err: any) {
-      alert(err.message || '批量更新商品状态失败')
+      setError(err.message || '批量更新商品状态失败')
       console.error('Error batch updating product status:', err)
     } finally {
       setUpdatingStatus(false)

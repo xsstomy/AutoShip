@@ -639,3 +639,212 @@ if (cookieHeader) {
 14. **Monitoring:** UptimeRobot, Pingdom for health checks
 15. **Analytics:** Google Analytics for user behavior tracking
 16. **Customer Support:** Intercom, Crisp for live chat
+
+---
+
+## 常见问题与解决方案 (Common Issues & Solutions)
+
+### 🔍 前端搜索功能问题
+
+#### 问题 1: React useEffect 闭包陷阱导致搜索参数不生效
+
+**症状表现:**
+- 搜索框输入内容后，API 请求未包含 `search` 参数
+- 搜索无效果，显示所有数据
+
+**根本原因:**
+- `fetchProducts` 函数未使用 `useCallback` 包装
+- 每次组件渲染时创建新的 `fetchProducts` 函数
+- `useEffect` 中捕获的是旧版本的闭包，包含过时的 `searchTerm` 值
+
+**解决方案:**
+```typescript
+// ❌ 错误的写法
+const fetchProducts = async () => { ... }
+useEffect(() => { fetchProducts() }, [searchTerm]) // 每次searchTerm变化都会创建新函数
+
+// ✅ 正确的写法
+const fetchProducts = useCallback(async () => {
+  // ... 使用最新的 searchTerm
+}, [admin, searchTerm, token, filterActive, navigate, page])
+
+useEffect(() => {
+  fetchProducts()
+}, [admin, navigate, page, filterActive, fetchProducts])
+
+useEffect(() => {
+  const delayedSearch = setTimeout(() => {
+    fetchProducts()
+  }, 500)
+  return () => clearTimeout(delayedSearch)
+}, [searchTerm, page, fetchProducts])
+```
+
+**预防措施:**
+- 所有在 `useEffect` 中使用的函数都必须用 `useCallback` 包装
+- 注意依赖项数组的完整性，确保函数在依赖变化时正确更新
+- 参考已有实现（`AdminInventoryManagement.tsx`）
+
+#### 问题 2: useCallback 和 useEffect 的调用顺序错误
+
+**症状表现:**
+- TypeScript 编译错误：`Block-scoped variable 'fetchProducts' used before its declaration`
+- 运行时错误：函数未定义
+
+**根本原因:**
+- `useEffect` 在 `useCallback` 之前调用
+- JavaScript 的提升机制无法处理这种情况
+
+**解决方案:**
+```typescript
+// ✅ 正确的顺序：先定义 useCallback，再定义 useEffect
+const fetchProducts = useCallback(async () => {
+  // ...
+}, [deps])
+
+useEffect(() => {
+  fetchProducts()
+}, [fetchProducts])
+```
+
+**预防措施:**
+- 永远将 `useCallback`/`useMemo` 声明放在 `useEffect` 之前
+- 遵循"依赖项声明在前，使用在后"的规则
+
+---
+
+### 🗄️ 后端数据库查询问题
+
+#### 问题 3: Drizzle ORM LIKE 查询不生效
+
+**症状表现:**
+- 数据库中确实包含匹配的数据，但查询返回空结果
+- 后端日志显示查询条件已构建，但实际 SQL 执行结果不正确
+
+**根本原因:**
+- Drizzle ORM 的 `like()` 函数在某些场景下不能正确生成 SQL
+- 参数传递方式可能与 SQLite 驱动不兼容
+
+**解决方案:**
+```typescript
+// ❌ 可能失效的写法
+import { like } from 'drizzle-orm'
+whereConditions.push(
+  like(schema.products.name, `%${search}%`)
+)
+
+// ✅ 可靠的写法：使用 sql 模板
+import { sql } from 'drizzle-orm'
+whereConditions.push(
+  sql`${schema.products.name} LIKE ${'%' + search + '%'}`
+)
+```
+
+**替代方案:**
+```typescript
+// 也可以使用 ilike 进行大小写不敏感搜索（PostgreSQL）
+import { ilike } from 'drizzle-orm'
+whereConditions.push(
+  ilike(schema.products.name, `%${search}%`)
+)
+```
+
+**预防措施:**
+- 对于复杂查询或 SQLite 场景，优先使用 `sql` 模板
+- 在测试环境验证所有查询条件的实际 SQL 生成
+- 参考 Drizzle 文档中关于不同数据库的兼容性说明
+
+#### 问题 4: 分支查询缺少 where 条件
+
+**症状表现:**
+- 在某些代码路径中，查询条件被忽略（如 `includePrices=true` 时）
+- 搜索、筛选等功能在特定场景下失效
+
+**根本原因:**
+- 代码中存在多个查询分支（如 `if (includePrices)`）
+- 部分分支未应用构建好的 `whereConditions`
+
+**解决方案:**
+```typescript
+if (includePrices) {
+  const result = await db
+    .select({...})
+    .from(schema.products)
+    .leftJoin(...)
+    .where(and(...whereConditions)) // 确保所有条件都被应用
+} else {
+  let queryBuilder = db.select().from(schema.products)
+  if (whereConditions.length > 0) {
+    queryBuilder = queryBuilder.where(and(...whereConditions)) // 同样应用条件
+  }
+}
+```
+
+**预防措施:**
+- 在所有查询分支中统一应用 `whereConditions`
+- 使用代码审查检查查询的完整性
+- 为查询函数编写单元测试，验证各种条件组合
+
+---
+
+### 🛠️ 开发调试最佳实践
+
+#### 调试步骤
+
+1. **前端调试**
+   ```typescript
+   // 添加临时调试日志
+   console.log('🔍 [DEBUG] fetchProducts called', { searchTerm, page, filterActive })
+   const params = new URLSearchParams({ page, limit: 20 })
+   if (searchTerm) {
+     params.append('search', searchTerm)
+     console.log('✅ [DEBUG] Search term added:', searchTerm)
+   }
+   ```
+
+2. **后端调试**
+   ```typescript
+   console.log('🔍 [Backend] queryProducts called', { page, limit, search })
+   if (search) {
+     console.log('🔍 [Backend] Applying search filter:', search)
+   }
+   ```
+
+3. **浏览器验证**
+   - 打开 Network 面板，确认请求 URL 包含正确参数
+   - 检查 Console 日志，确认函数调用和参数传递
+
+4. **数据库验证**
+   ```sql
+   -- 手动测试 SQL
+   SELECT * FROM products WHERE name LIKE '%hello%';
+   ```
+
+**注意事项:**
+- 调试完成后务必移除所有 `console.log`
+- 避免在生产代码中留下调试痕迹
+- 优先使用结构化日志（JSON 格式）便于后续分析
+
+---
+
+### 📝 最佳实践总结
+
+1. **React Hooks**
+   - 所有在 `useEffect` 依赖中使用的函数必须用 `useCallback` 包装
+   - 保持依赖项数组的完整性和准确性
+   - 遵循依赖项声明顺序：先定义后使用
+
+2. **Drizzle ORM**
+   - 复杂查询使用 `sql` 模板确保兼容性
+   - 在所有查询分支中统一应用筛选条件
+   - 为关键查询编写单元测试
+
+3. **调试方法**
+   - 从前端到后端逐层排查
+   - 使用浏览器 DevTools 和后端日志
+   - 验证实际 SQL 执行结果
+
+4. **代码审查**
+   - 特别关注 `useEffect` 和查询条件的完整性
+   - 对比现有实现的正确模式
+   - 确保新功能与现有功能行为一致

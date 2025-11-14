@@ -36,7 +36,7 @@ function getInventoryStatus(count: number): string {
 app.get('/', async (c) => {
   try {
     // 获取激活状态的商品（已优化：避免 N+1 查询）
-    const products = await productService.getActiveProductsWithDetails()
+    const products = await productService.getActiveProducts()
 
     // 为每个商品获取库存统计（每个商品1次查询，而不是2次）
     const productsWithInventory = await Promise.all(

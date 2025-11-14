@@ -1,7 +1,8 @@
 import { db, schema, withTransaction } from '../db'
-import { eq, and, desc, asc, count, like } from 'drizzle-orm'
+import { eq, and, desc, asc, count, like, inArray, sql } from 'drizzle-orm'
 import { DeliveryType, Currency } from '../db/schema'
 import { validateProduct, validateProductUpdate, validateProductQuery } from '../db/validation'
+import { errors } from '../utils/response'
 
 // 产品服务类
 export class ProductService {
@@ -60,16 +61,9 @@ export class ProductService {
   }
 
   /**
-   * 获取所有活跃产品（优化版：避免 N+1 查询）
+   * 获取所有活跃产品（包含价格信息，避免 N+1 查询）
    */
   async getActiveProducts() {
-    return await this.getActiveProductsWithDetails()
-  }
-
-  /**
-   * 获取所有活跃产品（包含价格和库存统计，避免 N+1 查询）
-   */
-  async getActiveProductsWithDetails() {
     const result = await db
       .select({
         product: schema.products,
@@ -83,10 +77,21 @@ export class ProductService {
       .where(eq(schema.products.isActive, true))
       .orderBy(asc(schema.products.sortOrder), asc(schema.products.createdAt))
 
-    // 按产品分组组合数据
+    return this.groupProductsWithPrices(result)
+  }
+
+  /**
+   * 按产品分组组合数据（私有方法）
+   */
+  private groupProductsWithPrices(rows: Array<{ product: any; price: any }>) {
+    // 边界检查
+    if (!rows || rows.length === 0) {
+      return []
+    }
+
     const productMap = new Map()
 
-    for (const row of result) {
+    for (const row of rows) {
       const productId = row.product.id
 
       if (!productMap.has(productId)) {
@@ -128,54 +133,60 @@ export class ProductService {
     }
 
     if (search) {
+      // 使用 Drizzle ORM 的 like 操作符，避免直接使用 SQL 模板字符串
+      const searchPattern = `%${search}%`
       whereConditions.push(
-        like(schema.products.name, `%${search}%`)
+        like(schema.products.name, searchPattern)
       )
     }
 
     let products
 
     if (includePrices) {
-      // 使用 JOIN 查询包含价格信息
-      const result = await db
+      // 使用子查询先分页获取产品ID，再JOIN价格信息（避免内存分页）
+      const offsetValue = offset || (page - 1) * limit
+
+      // 先查询分页后的产品
+      const paginatedProducts = await db
         .select({
-          product: schema.products,
-          price: schema.productPrices,
+          id: schema.products.id,
+          name: schema.products.name,
+          description: schema.products.description,
+          templateText: schema.products.templateText,
+          deliveryType: schema.products.deliveryType,
+          isActive: schema.products.isActive,
+          sortOrder: schema.products.sortOrder,
+          createdAt: schema.products.createdAt,
+          updatedAt: schema.products.updatedAt,
         })
         .from(schema.products)
-        .leftJoin(schema.productPrices, and(
-          eq(schema.products.id, schema.productPrices.productId),
-          eq(schema.productPrices.isActive, true)
-        ))
+        .where(and(...whereConditions))
+        .orderBy(asc(schema.products.sortOrder), desc(schema.products.createdAt))
+        .limit(limit)
+        .offset(offsetValue)
 
-      // 按产品分组组合数据
-      const productMap = new Map()
-
-      for (const row of result) {
-        const productId = row.product.id
-
-        if (!productMap.has(productId)) {
-          productMap.set(productId, {
-            ...row.product,
-            prices: []
+      if (paginatedProducts.length === 0) {
+        products = []
+      } else {
+        // 根据产品ID查询价格信息
+        const productIds = paginatedProducts.map(p => p.id)
+        const result = await db
+          .select({
+            product: schema.products,
+            price: schema.productPrices,
           })
-        }
+          .from(schema.products)
+          .leftJoin(schema.productPrices, and(
+            eq(schema.products.id, schema.productPrices.productId),
+            eq(schema.productPrices.isActive, true)
+          ))
+          .where(
+            inArray(schema.products.id, productIds)
+          )
 
-        if (row.price) {
-          const productData = productMap.get(productId)
-          productData.prices.push({
-            currency: row.price.currency,
-            price: row.price.price,
-            isActive: row.price.isActive,
-          })
-        }
+        // 按产品分组组合数据
+        products = this.groupProductsWithPrices(result)
       }
-
-      // 应用分页（从 Map 转为数组后分页）
-      const allProducts = Array.from(productMap.values())
-      const startIndex = offset || (page - 1) * limit
-      const endIndex = startIndex + limit
-      products = allProducts.slice(startIndex, endIndex)
     } else {
       // 只查询产品基本信息
       let queryBuilder = db.select().from(schema.products)
@@ -250,15 +261,17 @@ export class ProductService {
    * 永久删除产品
    */
   async forceDeleteProduct(productId: number) {
-    // 首先删除相关的价格记录
-    await db.delete(schema.productPrices)
-      .where(eq(schema.productPrices.productId, productId))
+    return await withTransaction(async (tx) => {
+      // 首先删除相关的价格记录
+      await tx.delete(schema.productPrices)
+        .where(eq(schema.productPrices.productId, productId))
 
-    // 然后删除产品
-    const result = await db.delete(schema.products)
-      .where(eq(schema.products.id, productId))
+      // 然后删除产品
+      const result = await tx.delete(schema.products)
+        .where(eq(schema.products.id, productId))
 
-    return result.changes > 0
+      return result.changes > 0
+    })
   }
 
   /**
@@ -343,37 +356,49 @@ export class ProductService {
    * 获取产品所有价格
    */
   async getProductPrices(productId: number, activeOnly = true) {
-    let query = db.select()
-      .from(schema.productPrices)
-      .where(eq(schema.productPrices.productId, productId))
+    const conditions = [eq(schema.productPrices.productId, productId)]
 
     if (activeOnly) {
-      query = query.where(eq(schema.productPrices.isActive, true))
+      conditions.push(eq(schema.productPrices.isActive, true))
     }
 
-    return await query.orderBy(asc(schema.productPrices.currency))
+    return await db.select()
+      .from(schema.productPrices)
+      .where(and(...conditions))
+      .orderBy(asc(schema.productPrices.currency))
   }
 
   /**
    * 批量更新产品排序
    */
   async updateProductSortOrder(productSortOrders: Array<{ id: number; sortOrder: number }>) {
-    return await withTransaction(async () => {
-      const results = []
-
-      for (const { id, sortOrder } of productSortOrders) {
-        const result = await db.update(schema.products)
-          .set({
-            sortOrder,
-            updatedAt: new Date().toISOString(),
-          })
-          .where(eq(schema.products.id, id))
-          .returning()
-
-        results.push(result[0])
+    return await withTransaction(async (tx) => {
+      if (productSortOrders.length === 0) {
+        return []
       }
 
-      return results
+      // 构建 CASE WHEN 更新语句
+      const caseWhenClause = productSortOrders
+        .map(({ id, sortOrder }) => `WHEN id = ${id} THEN ${sortOrder}`)
+        .join(' ')
+
+      const ids = productSortOrders.map(({ id }) => id)
+
+      // 单条 SQL 批量更新
+      const result = await tx.execute(sql`
+        UPDATE products
+        SET sortOrder = CASE ${caseWhenClause} END,
+            updatedAt = ${new Date().toISOString()}
+        WHERE id = ANY(${ids})
+      `)
+
+      // 返回更新后的产品信息
+      const updatedProducts = await tx.select()
+        .from(schema.products)
+        .where(sql`id = ANY(${ids})`)
+        .orderBy(sql`array_position(ARRAY[${ids}], id)`)
+
+      return updatedProducts
     })
   }
 
@@ -381,11 +406,8 @@ export class ProductService {
    * 检查产品是否存在
    */
   async productExists(productId: number) {
-    const result = await db.select({ count: count() })
-      .from(schema.products)
-      .where(eq(schema.products.id, productId))
-
-    return result[0].count > 0
+    const count = await this.getCount(eq(schema.products.id, productId))
+    return count > 0
   }
 
   /**
@@ -404,16 +426,13 @@ export class ProductService {
    * 获取产品统计信息
    */
   async getProductStats() {
-    // 总产品数
-    const totalProducts = await db.select({ count: count() })
-      .from(schema.products)
+    // 查询总产品数
+    const total = await this.getCount()
 
-    // 活跃产品数
-    const activeProducts = await db.select({ count: count() })
-      .from(schema.products)
-      .where(eq(schema.products.isActive, true))
+    // 查询活跃产品数
+    const active = await this.getCount(eq(schema.products.isActive, true))
 
-    // 按发货类型分组
+    // 按发货类型分组的统计
     const deliveryTypeStats = await db.select({
       deliveryType: schema.products.deliveryType,
       count: count(),
@@ -422,11 +441,25 @@ export class ProductService {
       .groupBy(schema.products.deliveryType)
 
     return {
-      total: totalProducts[0].count,
-      active: activeProducts[0].count,
-      inactive: totalProducts[0].count - activeProducts[0].count,
+      total,
+      active,
+      inactive: total - active,
       byDeliveryType: deliveryTypeStats,
     }
+  }
+
+  /**
+   * 公共查询方法：获取记录数
+   */
+  private async getCount(condition?: any) {
+    let query = db.select({ count: count() }).from(schema.products)
+
+    if (condition) {
+      query = query.where(condition)
+    }
+
+    const result = await query
+    return result[0].count
   }
 
   /**
@@ -435,27 +468,28 @@ export class ProductService {
   async duplicateProduct(productId: number, newName?: string) {
     const originalProduct = await this.getProductById(productId)
     if (!originalProduct) {
-      throw new Error('Product not found')
+      throw new Error(`PRODUCT_NOT_FOUND: Product with id ${productId} not found`)
     }
 
-    const originalPrices = await this.getProductPrices(productId)
+    const originalPrices = await this.getProductPrices(productId, false)
 
-    return await withTransaction(async () => {
+    return await withTransaction(async (tx) => {
       // 创建新产品
-      const newProduct = await this.createProduct({
+      const newProduct = await tx.insert(schema.products).values({
         name: newName || `${originalProduct.name} (Copy)`,
         description: originalProduct.description,
         templateText: originalProduct.templateText,
         deliveryType: originalProduct.deliveryType,
         isActive: false, // 复制的产品默认不激活
         sortOrder: originalProduct.sortOrder + 1,
-      })
+      }).returning()
 
       // 复制价格信息
       if (originalPrices.length > 0) {
         await Promise.all(
           originalPrices.map(price =>
-            this.addProductPrice(newProduct.id, {
+            tx.insert(schema.productPrices).values({
+              productId: newProduct[0].id,
               currency: price.currency,
               price: price.price,
               isActive: price.isActive,
@@ -464,7 +498,7 @@ export class ProductService {
         )
       }
 
-      return newProduct
+      return newProduct[0]
     })
   }
 }
