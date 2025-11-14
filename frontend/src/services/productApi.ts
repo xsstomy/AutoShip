@@ -1,6 +1,5 @@
 import axios, { AxiosError } from 'axios';
-import type { ProductListResponse, ProductDetailResponse } from '../types/product';
-import { mockProducts } from '../mock/products';
+import type { ProductListResponse, ProductDetailResponse, ApiErrorResponse } from '../types/product';
 
 /**
  * API 基础配置
@@ -12,29 +11,12 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
  * 创建 Axios 实例
  */
 const apiClient = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
+  baseURL: `${API_BASE_URL}/api/v1`,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
-
-/**
- * 请求拦截器 - 添加认证 token
- */
-apiClient.interceptors.request.use(
-  (config) => {
-    // 从localStorage获取token
-    const token = localStorage.getItem('admin_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
 
 /**
  * 响应拦截器 - 统一错误处理
@@ -92,23 +74,19 @@ interface CustomAxiosError extends AxiosError {
  * @returns Promise<ProductListResponse>
  */
 export const getProducts = async (): Promise<ProductListResponse> => {
-  // 开发模式下返回模拟数据
-  if (import.meta.env.DEV) {
-    await new Promise(resolve => setTimeout(resolve, 500)); // 模拟网络延迟
-    return {
-      products: mockProducts,
-      total: mockProducts.length,
-    };
-  }
-
   try {
-    const response = await apiClient.get<ProductListResponse>('/admin/products', {
-      params: { page: 1, limit: 20 },
-    });
+    const response = await apiClient.get<ProductListResponse>('/products');
     return response.data;
   } catch (error) {
     console.error('获取商品列表失败:', error);
-    throw error;
+
+    // 如果是API错误，返回更友好的错误信息
+    if (axios.isAxiosError(error) && error.response?.data) {
+      const errorData = error.response.data as ApiErrorResponse;
+      throw new Error(errorData.error || '获取商品列表失败');
+    }
+
+    throw new Error('网络连接失败，请检查网络设置');
   }
 };
 
@@ -117,23 +95,25 @@ export const getProducts = async (): Promise<ProductListResponse> => {
  * @param id 商品 ID
  * @returns Promise<ProductDetailResponse>
  */
-export const getProductById = async (id: string): Promise<ProductDetailResponse> => {
-  // 开发模式下返回模拟数据
-  if (import.meta.env.DEV) {
-    await new Promise(resolve => setTimeout(resolve, 300)); // 模拟网络延迟
-    const product = mockProducts.find(p => p.id === id);
-    if (!product) {
-      throw new Error('商品不存在');
-    }
-    return { product };
-  }
-
+export const getProductById = async (id: number): Promise<ProductDetailResponse> => {
   try {
-    const response = await apiClient.get<ProductDetailResponse>(`/admin/products/${id}`);
+    const response = await apiClient.get<ProductDetailResponse>(`/products/${id}`);
     return response.data;
   } catch (error) {
     console.error('获取商品详情失败:', error);
-    throw error;
+
+    // 如果是API错误，返回更友好的错误信息
+    if (axios.isAxiosError(error) && error.response?.data) {
+      const errorData = error.response.data as ApiErrorResponse;
+      throw new Error(errorData.error || '获取商品详情失败');
+    }
+
+    // 处理404错误
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      throw new Error('商品不存在或已下架');
+    }
+
+    throw new Error('网络连接失败，请检查网络设置');
   }
 };
 
@@ -143,12 +123,14 @@ export const getProductById = async (id: string): Promise<ProductDetailResponse>
  */
 export const refreshProducts = async (): Promise<ProductListResponse> => {
   try {
-    const response = await apiClient.get<ProductListResponse>('/admin/products', {
-      params: { page: 1, limit: 20, refresh: true },
+    // 添加时间戳来避免浏览器缓存
+    const timestamp = Date.now();
+    const response = await apiClient.get<ProductListResponse>('/products', {
+      params: { t: timestamp },
     });
     return response.data;
   } catch (error) {
     console.error('刷新商品列表失败:', error);
-    throw error;
+    throw new Error('刷新商品列表失败，请稍后重试');
   }
 };

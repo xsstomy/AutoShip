@@ -1,41 +1,55 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import type { ProductCardData, Currency } from '../../types/product';
+import type { Product, Currency, ProductPrice } from '../../types/product';
 import { formatCurrency } from '../../utils/currency';
 
 interface ProductCardProps {
-  product: ProductCardData;
-  currency: Currency;
+  product: Product;
+  selectedCurrency: Currency;
+  currentPrice?: ProductPrice;
   onCurrencyChange?: (currency: Currency) => void;
 }
 
 /**
  * 商品卡片组件
  */
-const ProductCard: React.FC<ProductCardProps> = ({ product, currency }) => {
-  const getProductTypeText = (type: string): string => {
+const ProductCard: React.FC<ProductCardProps> = ({ product, selectedCurrency, currentPrice }) => {
+  const getDeliveryTypeText = (type: string): string => {
     switch (type) {
-      case 'card_key':
-        return '卡密';
+      case 'text':
+        return '文本发货';
       case 'download':
-        return '下载链接';
-      case 'license':
-        return '许可证';
+        return '下载发货';
+      case 'hybrid':
+        return '混合发货';
       default:
         return type;
     }
   };
 
-  const getProductTypeBadgeColor = (type: string): string => {
+  const getDeliveryTypeBadgeColor = (type: string): string => {
     switch (type) {
-      case 'card_key':
+      case 'text':
         return 'bg-blue-100 text-blue-800';
       case 'download':
         return 'bg-green-100 text-green-800';
-      case 'license':
+      case 'hybrid':
         return 'bg-purple-100 text-purple-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getInventoryStatusColor = (status: string): string => {
+    switch (status) {
+      case '已售罄':
+        return 'text-red-600';
+      case '库存紧张':
+        return 'text-orange-600';
+      case '库存偏低':
+        return 'text-yellow-600';
+      default:
+        return 'text-green-600';
     }
   };
 
@@ -77,30 +91,39 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, currency }) => {
               {product.name}
             </h3>
             <span
-              className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ml-2 ${getProductTypeBadgeColor(
-                product.type
+              className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ml-2 ${getDeliveryTypeBadgeColor(
+                product.deliveryType
               )}`}
             >
-              {getProductTypeText(product.type)}
+              {getDeliveryTypeText(product.deliveryType)}
             </span>
           </div>
 
           {/* 商品描述 */}
           <p className="text-gray-600 text-sm mb-3 line-clamp-2 flex-1">
-            {product.description}
+            {product.description || '暂无描述'}
           </p>
 
           {/* 价格和库存 */}
           <div className="flex items-center justify-between mt-auto">
             <div className="text-2xl font-bold text-gray-900">
-              {formatCurrency(product.price, currency)}
+              {currentPrice ? formatCurrency(currentPrice.price, currentPrice.currency) : '价格面议'}
             </div>
             <div className="text-sm text-gray-500">
-              库存: <span className={product.stock > 0 ? 'text-green-600' : 'text-red-600'}>
-                {product.stock > 0 ? product.stock : '无库存'}
+              库存: <span className={getInventoryStatusColor(product.inventoryStatus)}>
+                {product.inventory.available > 0 ? `${product.inventory.available} 件` : product.inventoryStatus}
               </span>
             </div>
           </div>
+
+          {/* 库存状态指示器 */}
+          {product.inventoryStatus !== '库存充足' && (
+            <div className="mt-2">
+              <span className={`text-xs font-medium ${getInventoryStatusColor(product.inventoryStatus)}`}>
+                {product.inventoryStatus}
+              </span>
+            </div>
+          )}
 
           {/* 查看详情按钮 */}
           <div className="mt-4 w-full">

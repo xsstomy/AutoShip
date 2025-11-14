@@ -22,7 +22,7 @@ const ProductDetail: React.FC = () => {
       setLoading(true);
       setError(null);
       const response = await getProductById(productId);
-      setProduct(response.product);
+      setProduct(response.data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '商品加载失败，请稍后重试';
       setError(errorMessage);
@@ -44,27 +44,27 @@ const ProductDetail: React.FC = () => {
     setCurrency(newCurrency);
   };
 
-  const getProductTypeText = (type: string): string => {
-    switch (type) {
-      case 'card_key':
-        return '卡密';
+  const getProductTypeText = (deliveryType: string): string => {
+    switch (deliveryType) {
+      case 'text':
+        return '文本内容';
       case 'download':
         return '下载链接';
-      case 'license':
-        return '许可证';
+      case 'hybrid':
+        return '混合发货';
       default:
-        return type;
+        return deliveryType;
     }
   };
 
-  const getProductTypeDescription = (type: string): string => {
-    switch (type) {
-      case 'card_key':
-        return '购买后将通过邮件自动发送卡密信息';
+  const getProductTypeDescription = (deliveryType: string): string => {
+    switch (deliveryType) {
+      case 'text':
+        return '购买后将通过邮件自动发送文本内容';
       case 'download':
         return '购买后将自动发送下载链接';
-      case 'license':
-        return '购买后将自动发送许可证密钥';
+      case 'hybrid':
+        return '购买后将自动发送文本内容和下载链接';
       default:
         return '';
     }
@@ -123,8 +123,18 @@ const ProductDetail: React.FC = () => {
     );
   }
 
-  // 转换价格到当前货币
-  const convertedPrice = convertCurrency(product.price, product.currency, currency);
+  // 获取当前货币的价格
+  const getCurrentPrice = () => {
+    const priceItem = product.prices.find(p => p.currency === currency);
+    if (priceItem) {
+      return priceItem.price;
+    }
+    // 如果没有当前货币价格，使用第一个价格并转换
+    const firstPrice = product.prices[0];
+    return firstPrice ? convertCurrency(firstPrice.price, firstPrice.currency, currency) : 0;
+  };
+
+  const convertedPrice = getCurrentPrice();
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -186,7 +196,7 @@ const ProductDetail: React.FC = () => {
             <div className="flex flex-col">
               {/* 商品类型标签 */}
               <span className="inline-block px-3 py-1 text-sm font-medium rounded-full bg-blue-100 text-blue-800 w-fit mb-4">
-                {getProductTypeText(product.type)}
+                {getProductTypeText(product.deliveryType)}
               </span>
 
               {/* 商品名称 */}
@@ -219,29 +229,29 @@ const ProductDetail: React.FC = () => {
                 <span className="text-lg font-medium text-gray-700 block mb-2">库存状态</span>
                 <span
                   className={`text-lg font-medium ${
-                    product.stock > 0 ? 'text-green-600' : 'text-red-600'
+                    product.inventory.available > 0 ? 'text-green-600' : 'text-red-600'
                   }`}
                 >
-                  {product.stock > 0 ? `现货: ${product.stock} 件` : '暂无库存'}
+                  {product.inventory.available > 0 ? `现货: ${product.inventory.available} 件` : '暂无库存'}
                 </span>
               </div>
 
               {/* 商品类型说明 */}
               <div className="mb-6">
                 <span className="text-lg font-medium text-gray-700 block mb-2">商品说明</span>
-                <p className="text-gray-600">{getProductTypeDescription(product.type)}</p>
+                <p className="text-gray-600">{getProductTypeDescription(product.deliveryType)}</p>
               </div>
 
               {/* 立即购买按钮 */}
               <button
                 className={`w-full py-3 px-6 rounded-lg font-medium text-white transition-colors duration-200 ${
-                  product.stock > 0
+                  product.inventory.available > 0
                     ? 'bg-blue-600 hover:bg-blue-700'
                     : 'bg-gray-400 cursor-not-allowed'
                 }`}
-                disabled={product.stock === 0}
+                disabled={product.inventory.available === 0}
                 onClick={() => {
-                  if (product.stock > 0) {
+                  if (product.inventory.available > 0) {
                     const checkoutUrl = buildCheckoutUrl({
                       productId: product.id,
                       productName: product.name,
@@ -252,7 +262,7 @@ const ProductDetail: React.FC = () => {
                   }
                 }}
               >
-                {product.stock > 0 ? '立即购买' : '暂无库存'}
+                {product.inventory.available > 0 ? '立即购买' : '暂无库存'}
               </button>
             </div>
           </div>

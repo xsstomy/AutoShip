@@ -218,18 +218,25 @@ export function getClientIP(request: any): string {
     if (realIp) return realIp
     const cfConnectingIp = request.header('cf-connecting-ip')
     if (cfConnectingIp) return cfConnectingIp
-    return request.ip || request.header('remote-address') || 'unknown'
+
+    // 尝试从底层 Request 对象获取
+    if (request.raw && request.raw.socket) {
+      return request.raw.socket.remoteAddress || 'localhost'
+    }
+
+    // 本地开发环境回退
+    return request.ip || request.header('remote-address') || 'localhost'
   }
 
   // 支持标准 Request 对象（带 headers 属性）
   if (request && request.headers) {
     const forwarded = request.headers['x-forwarded-for']
     const ip = forwarded ? forwarded.split(',')[0] : request.ip
-    return ip || request.connection?.remoteAddress || 'unknown'
+    return ip || request.connection?.remoteAddress || 'localhost'
   }
 
   // 兜底处理
-  return 'unknown'
+  return 'localhost'
 }
 
 /**

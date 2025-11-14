@@ -11,7 +11,6 @@ const app = new Hono()
 
 // 价格更新验证模式
 const updatePriceSchema = z.object({
-  productId: z.number().int().positive(),
   prices: z.array(z.object({
     currency: z.string().min(1),
     price: z.number().positive(),

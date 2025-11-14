@@ -21,7 +21,7 @@ const ProductDisplay: React.FC = () => {
       setLoading(true);
       setError(null);
       const response = await getProducts();
-      setProducts(response.products);
+      setProducts(response.data.products);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '商品加载失败，请稍后重试';
       setError(errorMessage);
@@ -115,22 +115,15 @@ const ProductDisplay: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {products.map((product) => {
-              // 转换价格到当前货币
-              const convertedPrice = convertCurrency(
-                product.price,
-                product.currency,
-                currency
-              );
+              // 获取当前货币的价格，如果没有则使用第一个价格
+              const currentPrice = product.prices.find(p => p.currency === currency) || product.prices[0];
 
               return (
                 <ProductCard
                   key={product.id}
-                  product={{
-                    ...product,
-                    price: convertedPrice,
-                    currency: currency,
-                  }}
-                  currency={currency}
+                  product={product}
+                  selectedCurrency={currency}
+                  currentPrice={currentPrice}
                 />
               );
             })}

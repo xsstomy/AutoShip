@@ -1,7 +1,7 @@
 /**
- * 商品类型
+ * 商品发货类型
  */
-export type ProductType = 'card_key' | 'download' | 'license';
+export type DeliveryType = 'text' | 'download' | 'hybrid';
 
 /**
  * 货币类型
@@ -9,34 +9,57 @@ export type ProductType = 'card_key' | 'download' | 'license';
 export type Currency = 'CNY' | 'USD';
 
 /**
- * 商品接口
+ * 商品价格接口
+ */
+export interface ProductPrice {
+  currency: Currency;
+  price: number;
+  isActive: boolean;
+}
+
+/**
+ * 库存信息接口
+ */
+export interface Inventory {
+  available: number;
+  total: number;
+  used: number;
+}
+
+/**
+ * 商品接口（匹配后端数据结构）
  */
 export interface Product {
-  id: string;                    // 商品 ID
+  id: number;                    // 商品 ID
   name: string;                  // 商品名称
   description: string;           // 商品描述
-  price: number;                 // 价格（基础价格，以 CNY 为基准）
-  currency: Currency;            // 基础货币类型（默认 CNY）
-  image?: string;                // 商品封面图片 URL
-  type: ProductType;             // 商品类型
-  stock: number;                 // 库存数量
-  createdAt: Date;               // 创建时间
-  updatedAt: Date;               // 更新时间
+  deliveryType: DeliveryType;   // 发货类型
+  templateText?: string;         // 模板文本
+  prices: ProductPrice[];        // 价格列表
+  inventory: Inventory;          // 库存信息
+  inventoryStatus: string;       // 库存状态文本
+  isActive: boolean;             // 是否激活
+  createdAt: string;             // 创建时间
+  updatedAt: string;             // 更新时间
 }
 
 /**
  * 商品列表响应接口
  */
 export interface ProductListResponse {
-  products: Product[];
-  total: number;
+  success: boolean;
+  data: {
+    products: Product[];
+    total: number;
+  };
 }
 
 /**
  * 商品详情响应接口
  */
 export interface ProductDetailResponse {
-  product: Product;
+  success: boolean;
+  data: Product;
 }
 
 /**
@@ -58,15 +81,34 @@ export interface CurrencyDisplay {
 }
 
 /**
+ * API错误响应接口
+ */
+export interface ApiErrorResponse {
+  success: false;
+  error: string;
+}
+
+/**
  * 商品卡片显示用简化接口
  */
 export interface ProductCardData {
-  id: string;
+  id: number;
   name: string;
   description: string;
-  price: number;
-  currency: Currency;
+  prices: ProductPrice[];
+  inventory: Inventory;
+  inventoryStatus: string;
+  deliveryType: DeliveryType;
   image?: string;
-  type: ProductType;
-  stock: number;
+  isActive: boolean;
+}
+
+/**
+ * 商品显示选项
+ */
+export interface ProductDisplayOptions {
+  showInventory: boolean;
+  showPrices: boolean;
+  showDescription: boolean;
+  currency?: Currency;
 }
