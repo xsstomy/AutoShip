@@ -3,6 +3,7 @@ import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { productService } from '../services/product-service'
 import { inventoryService } from '../services/inventory-service'
+import { successResponse, errors } from '../utils/response'
 
 const app = new Hono()
 
@@ -34,18 +35,15 @@ function getInventoryStatus(count: number): string {
  */
 app.get('/', async (c) => {
   try {
-    // 只获取激活状态的商品
-    const products = await productService.getActiveProducts()
+    // 获取激活状态的商品（已优化：避免 N+1 查询）
+    const products = await productService.getActiveProductsWithDetails()
 
-    // 为每个商品添加价格和库存信息
-    const productsWithDetails = await Promise.all(
+    // 为每个商品获取库存统计（每个商品1次查询，而不是2次）
+    const productsWithInventory = await Promise.all(
       products.map(async (product) => {
         try {
-          // 获取商品价格
-          const prices = await productService.getProductPrices(product.id, true)
-
-          // 获取库存统计
-          const inventoryStats = await inventoryService.getProductInventoryStats(product.id)
+          // 获取库存统计（已优化：单次查询获取所有统计）
+          const inventoryStats = await inventoryService.getInventoryStats(product.id)
 
           // 计算库存状态
           const inventoryStatus = getInventoryStatus(inventoryStats.available)
@@ -55,11 +53,7 @@ app.get('/', async (c) => {
             name: product.name,
             description: product.description || '',
             deliveryType: product.deliveryType,
-            prices: prices.map(price => ({
-              currency: price.currency,
-              price: price.price,
-              isActive: price.isActive,
-            })),
+            prices: product.prices || [],
             inventory: {
               available: inventoryStats.available,
               total: inventoryStats.total,
@@ -71,14 +65,14 @@ app.get('/', async (c) => {
             updatedAt: product.updatedAt,
           }
         } catch (error) {
-          console.error(`获取商品 ${product.id} 详情失败:`, error)
-          // 如果获取详情失败，返回基本信息
+          console.error(`获取商品 ${product.id} 库存失败:`, error)
+          // 如果获取库存失败，返回基本信息
           return {
             id: product.id,
             name: product.name,
             description: product.description || '',
             deliveryType: product.deliveryType,
-            prices: [],
+            prices: product.prices || [],
             inventory: {
               available: 0,
               total: 0,
@@ -93,19 +87,13 @@ app.get('/', async (c) => {
       })
     )
 
-    return c.json({
-      success: true,
-      data: {
-        products: productsWithDetails,
-        total: productsWithDetails.length,
-      },
+    return successResponse(c, {
+      products: productsWithInventory,
+      total: productsWithInventory.length,
     })
   } catch (error) {
     console.error('获取商品列表失败:', error)
-    return c.json({
-      success: false,
-      error: '获取商品列表失败，请稍后重试',
-    }, 500)
+    return errors.INTERNAL_ERROR(c, '获取商品列表失败，请稍后重试')
   }
 })
 
@@ -121,18 +109,12 @@ app.get('/:id', zValidator('param', productParamsSchema), async (c) => {
     const product = await productService.getProductById(id)
 
     if (!product) {
-      return c.json({
-        success: false,
-        error: '商品不存在',
-      }, 404)
+      return errors.PRODUCT_NOT_FOUND(c)
     }
 
     // 检查商品是否激活
     if (!product.isActive) {
-      return c.json({
-        success: false,
-        error: '商品已下架',
-      }, 404)
+      return errors.PRODUCT_INACTIVE(c)
     }
 
     try {
@@ -167,39 +149,30 @@ app.get('/:id', zValidator('param', productParamsSchema), async (c) => {
         updatedAt: product.updatedAt,
       }
 
-      return c.json({
-        success: true,
-        data: productDetails,
-      })
+      return successResponse(c, productDetails)
     } catch (detailError) {
       console.error(`获取商品 ${id} 详情失败:`, detailError)
       // 返回基本信息
-      return c.json({
-        success: true,
-        data: {
-          id: product.id,
-          name: product.name,
-          description: product.description || '',
-          deliveryType: product.deliveryType,
-          prices: [],
-          inventory: {
-            available: 0,
-            total: 0,
-            used: 0,
-          },
-          inventoryStatus: '库存未知',
-          isActive: product.isActive,
-          createdAt: product.createdAt,
-          updatedAt: product.updatedAt,
+      return successResponse(c, {
+        id: product.id,
+        name: product.name,
+        description: product.description || '',
+        deliveryType: product.deliveryType,
+        prices: [],
+        inventory: {
+          available: 0,
+          total: 0,
+          used: 0,
         },
+        inventoryStatus: '库存未知',
+        isActive: product.isActive,
+        createdAt: product.createdAt,
+        updatedAt: product.updatedAt,
       })
     }
   } catch (error) {
     console.error('获取商品详情失败:', error)
-    return c.json({
-      success: false,
-      error: '获取商品详情失败，请稍后重试',
-    }, 500)
+    return errors.INTERNAL_ERROR(c, '获取商品详情失败，请稍后重试')
   }
 })
 

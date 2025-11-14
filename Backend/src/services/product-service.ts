@@ -60,38 +60,59 @@ export class ProductService {
   }
 
   /**
-   * 获取所有活跃产品
+   * 获取所有活跃产品（优化版：避免 N+1 查询）
    */
   async getActiveProducts() {
-    const products = await db.select()
+    return await this.getActiveProductsWithDetails()
+  }
+
+  /**
+   * 获取所有活跃产品（包含价格和库存统计，避免 N+1 查询）
+   */
+  async getActiveProductsWithDetails() {
+    const result = await db
+      .select({
+        product: schema.products,
+        price: schema.productPrices,
+      })
       .from(schema.products)
+      .leftJoin(schema.productPrices, and(
+        eq(schema.products.id, schema.productPrices.productId),
+        eq(schema.productPrices.isActive, true)
+      ))
       .where(eq(schema.products.isActive, true))
       .orderBy(asc(schema.products.sortOrder), asc(schema.products.createdAt))
 
-    // 为每个产品获取价格信息
-    const productsWithPrices = await Promise.all(
-      products.map(async (product) => {
-        const prices = await db.select()
-          .from(schema.productPrices)
-          .where(and(
-            eq(schema.productPrices.productId, product.id),
-            eq(schema.productPrices.isActive, true)
-          ))
+    // 按产品分组组合数据
+    const productMap = new Map()
 
-        return {
-          ...product,
-          prices
-        }
-      })
-    )
+    for (const row of result) {
+      const productId = row.product.id
 
-    return productsWithPrices
+      if (!productMap.has(productId)) {
+        productMap.set(productId, {
+          ...row.product,
+          prices: []
+        })
+      }
+
+      if (row.price) {
+        const productData = productMap.get(productId)
+        productData.prices.push({
+          currency: row.price.currency,
+          price: row.price.price,
+          isActive: row.price.isActive,
+        })
+      }
+    }
+
+    return Array.from(productMap.values())
   }
 
   /**
    * 查询产品
    */
-  async queryProducts(query: any) {
+  async queryProducts(query: any, includePrices = false) {
     const validatedQuery = validateProductQuery(query)
     const { page = 1, limit = 20, offset = 0, isActive, deliveryType, search } = validatedQuery
 
@@ -112,18 +133,64 @@ export class ProductService {
       )
     }
 
-    let queryBuilder = db.select().from(schema.products)
+    let products
 
-    if (whereConditions.length > 0) {
-      queryBuilder = queryBuilder.where(and(...whereConditions))
+    if (includePrices) {
+      // 使用 JOIN 查询包含价格信息
+      const result = await db
+        .select({
+          product: schema.products,
+          price: schema.productPrices,
+        })
+        .from(schema.products)
+        .leftJoin(schema.productPrices, and(
+          eq(schema.products.id, schema.productPrices.productId),
+          eq(schema.productPrices.isActive, true)
+        ))
+
+      // 按产品分组组合数据
+      const productMap = new Map()
+
+      for (const row of result) {
+        const productId = row.product.id
+
+        if (!productMap.has(productId)) {
+          productMap.set(productId, {
+            ...row.product,
+            prices: []
+          })
+        }
+
+        if (row.price) {
+          const productData = productMap.get(productId)
+          productData.prices.push({
+            currency: row.price.currency,
+            price: row.price.price,
+            isActive: row.price.isActive,
+          })
+        }
+      }
+
+      // 应用分页（从 Map 转为数组后分页）
+      const allProducts = Array.from(productMap.values())
+      const startIndex = offset || (page - 1) * limit
+      const endIndex = startIndex + limit
+      products = allProducts.slice(startIndex, endIndex)
+    } else {
+      // 只查询产品基本信息
+      let queryBuilder = db.select().from(schema.products)
+
+      if (whereConditions.length > 0) {
+        queryBuilder = queryBuilder.where(and(...whereConditions))
+      }
+
+      queryBuilder = queryBuilder
+        .orderBy(asc(schema.products.sortOrder), desc(schema.products.createdAt))
+        .limit(limit)
+        .offset(offset || (page - 1) * limit)
+
+      products = await queryBuilder
     }
-
-    queryBuilder = queryBuilder
-      .orderBy(asc(schema.products.sortOrder), desc(schema.products.createdAt))
-      .limit(limit)
-      .offset(offset || (page - 1) * limit)
-
-    const products = await queryBuilder
 
     // 获取总数
     let countQuery = db.select({ count: count() }).from(schema.products)

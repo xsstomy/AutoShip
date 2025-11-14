@@ -6,6 +6,7 @@ import { adminAuth } from '../middleware/admin-jwt-auth'
 import { getClientIP, sanitizeForLog } from '../utils/auth'
 import { AdminEventType, AdminEventCategory } from '../db/schema'
 import { validateProduct, validateProductPrice } from '../db/validation'
+import { successResponse, errors } from '../utils/response'
 
 const app = new Hono()
 
@@ -142,48 +143,37 @@ app.get('/products', adminAuth, async (c) => {
       query.isActive = isActive === 'true'
     }
 
-    // 获取商品列表（包含价格信息）
-    const productsResult = await productService.queryProducts(query)
+    // 获取商品列表（包含价格信息，已优化：使用 JOIN 避免 N+1 查询）
+    const productsResult = await productService.queryProducts(query, true)
     const { products, pagination } = productsResult
 
-    // 为每个商品添加库存统计信息
+    // 为每个商品添加库存统计信息（优化：对每个商品只查询1次库存统计）
     const productsWithInventory = await Promise.all(
       products.map(async (product) => {
-        // 获取库存数量
-        const availableInventory = await inventoryService.getAvailableInventory(product.id, 1)
-        const totalInventory = await inventoryService.getProductInventoryStats(product.id)
-
-        // 组合商品、价格和库存信息
-        const prices = await productService.getProductPrices(product.id)
-        const inventoryCount = totalInventory.available
+        // 获取库存统计（已优化：单次查询获取所有统计）
+        const totalInventory = await inventoryService.getInventoryStats(product.id)
 
         return {
           ...product,
-          prices,
+          prices: product.prices || [],
           inventory: {
-            available: inventoryCount,
+            available: totalInventory.available,
             total: totalInventory.total,
             used: totalInventory.used,
           },
           // 计算库存状态
-          inventoryStatus: getInventoryStatus(inventoryCount),
+          inventoryStatus: getInventoryStatus(totalInventory.available),
         }
       })
     )
 
-    return c.json({
-      success: true,
-      data: {
-        products: productsWithInventory,
-        pagination,
-      },
+    return successResponse(c, {
+      products: productsWithInventory,
+      pagination,
     })
   } catch (error) {
     console.error('获取商品列表失败:', error)
-    return c.json({
-      success: false,
-      error: '获取商品列表失败',
-    }, 500)
+    return errors.INTERNAL_ERROR(c, '获取商品列表失败')
   }
 })
 

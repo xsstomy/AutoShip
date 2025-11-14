@@ -1,6 +1,8 @@
 import { Context, Next } from 'hono'
+import { parse } from 'cookie'
 import { verifyToken } from '../utils/auth'
 import { adminUserRepository, adminSessionRepository } from '../db'
+import { errors } from '../utils/response'
 
 export interface AdminUser {
   id: number
@@ -18,39 +20,31 @@ export async function adminAuth(c: Context, next: Next) {
     // 首先尝试从Authorization header获取token
     let token = c.req.header('Authorization')?.replace(/^Bearer\s+/, '')
 
-    // 如果Authorization header中没有token，尝试从cookie获取
+    // 如果Authorization header中没有token，尝试从cookie获取（更安全的解析方式）
     if (!token) {
-      token = c.req.header('cookie')?.match(/admin_token=([^;]+)/)?.[1]
+      const cookieHeader = c.req.header('cookie')
+      if (cookieHeader) {
+        const cookies = parse(cookieHeader)
+        token = cookies.admin_token
+      }
     }
 
     if (!token) {
-      return c.json({
-        success: false,
-        error: '未登录，请先登录',
-        code: 'UNAUTHORIZED',
-      }, 401)
+      return errors.UNAUTHORIZED(c)
     }
 
     // 验证令牌
     const payload = verifyToken(token)
 
     if (!payload) {
-      return c.json({
-        success: false,
-        error: '令牌无效或已过期',
-        code: 'INVALID_TOKEN',
-      }, 401)
+      return errors.INVALID_TOKEN(c)
     }
 
     // 验证会话
     const session = await adminSessionRepository.findBySessionId(payload.sessionId)
 
     if (!session || !session.isActive) {
-      return c.json({
-        success: false,
-        error: '会话已失效，请重新登录',
-        code: 'SESSION_INVALID',
-      }, 401)
+      return errors.SESSION_INVALID(c)
     }
 
     // 检查会话是否过期
@@ -61,22 +55,14 @@ export async function adminAuth(c: Context, next: Next) {
       // 停用过期的会话
       await adminSessionRepository.deactivateSession(payload.sessionId)
 
-      return c.json({
-        success: false,
-        error: '会话已过期，请重新登录',
-        code: 'SESSION_EXPIRED',
-      }, 401)
+      return errors.SESSION_EXPIRED(c)
     }
 
     // 获取管理员信息
     const admin = await adminUserRepository.findById(payload.adminId)
 
     if (!admin || !admin.isActive) {
-      return c.json({
-        success: false,
-        error: '账户不存在或已被禁用',
-        code: 'ACCOUNT_DISABLED',
-      }, 403)
+      return errors.ACCOUNT_DISABLED(c)
     }
 
     // 更新最后活动时间
@@ -95,11 +81,7 @@ export async function adminAuth(c: Context, next: Next) {
     await next()
   } catch (error) {
     console.error('Admin auth middleware error:', error)
-    return c.json({
-      success: false,
-      error: '认证失败',
-      code: 'AUTH_ERROR',
-    }, 500)
+    return errors.INTERNAL_ERROR(c, '认证失败')
   }
 }
 
@@ -114,19 +96,11 @@ export function requireRole(roles: string | string[]) {
     const admin = c.get('admin') as AdminUser | undefined
 
     if (!admin) {
-      return c.json({
-        success: false,
-        error: '未认证',
-        code: 'UNAUTHENTICATED',
-      }, 401)
+      return errors.UNAUTHORIZED(c, '未认证')
     }
 
     if (!allowedRoles.includes(admin.role)) {
-      return c.json({
-        success: false,
-        error: '没有权限执行此操作',
-        code: 'INSUFFICIENT_PERMISSIONS',
-      }, 403)
+      return errors.INSUFFICIENT_PERMISSIONS(c)
     }
 
     await next()
@@ -149,9 +123,13 @@ export async function optionalAdminAuth(c: Context, next: Next) {
     // 首先尝试从Authorization header获取token
     let token = c.req.header('Authorization')?.replace(/^Bearer\s+/, '')
 
-    // 如果Authorization header中没有token，尝试从cookie获取
+    // 如果Authorization header中没有token，尝试从cookie获取（更安全的解析方式）
     if (!token) {
-      token = c.req.header('cookie')?.match(/admin_token=([^;]+)/)?.[1]
+      const cookieHeader = c.req.header('cookie')
+      if (cookieHeader) {
+        const cookies = parse(cookieHeader)
+        token = cookies.admin_token
+      }
     }
 
     if (token) {

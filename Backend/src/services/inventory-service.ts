@@ -148,41 +148,34 @@ export class InventoryService {
   }
 
   /**
-   * 获取产品库存统计
+   * 获取产品库存统计（优化版：单次查询获取所有统计）
    */
   async getInventoryStats(productId: number) {
-    const total = await db.select({ count: count() })
+    const result = await db
+      .select({
+        total: count(),
+        used: count().filter(eq(schema.inventoryText.isUsed, true)),
+        available: count().filter(and(
+          eq(schema.inventoryText.isUsed, false),
+          isNull(schema.inventoryText.expiresAt) || `${schema.inventoryText.expiresAt} > datetime('now')`
+        )),
+        expired: count().filter(`${schema.inventoryText.expiresAt} <= datetime('now')`),
+      })
       .from(schema.inventoryText)
       .where(eq(schema.inventoryText.productId, productId))
 
-    const used = await db.select({ count: count() })
-      .from(schema.inventoryText)
-      .where(and(
-        eq(schema.inventoryText.productId, productId),
-        eq(schema.inventoryText.isUsed, true)
-      ))
-
-    const available = await db.select({ count: count() })
-      .from(schema.inventoryText)
-      .where(and(
-        eq(schema.inventoryText.productId, productId),
-        eq(schema.inventoryText.isUsed, false),
-        isNull(schema.inventoryText.expiresAt) || `${schema.inventoryText.expiresAt} > datetime('now')`
-      ))
-
-    const expired = await db.select({ count: count() })
-      .from(schema.inventoryText)
-      .where(and(
-        eq(schema.inventoryText.productId, productId),
-        `${schema.inventoryText.expiresAt} <= datetime('now')`
-      ))
+    const stats = result[0]
+    const total = stats.total || 0
+    const used = stats.used || 0
+    const available = stats.available || 0
+    const expired = stats.expired || 0
 
     return {
-      total: total[0].count,
-      used: used[0].count,
-      available: available[0].count,
-      expired: expired[0].count,
-      usageRate: total[0].count > 0 ? (used[0].count / total[0].count) * 100 : 0,
+      total,
+      used,
+      available,
+      expired,
+      usageRate: total > 0 ? (used / total) * 100 : 0,
     }
   }
 
