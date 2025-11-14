@@ -71,6 +71,15 @@ const CheckoutPage: React.FC = () => {
     });
   }, [searchParams]);
 
+  // 根据货币自动设置支付网关
+  useEffect(() => {
+    if (productParams?.currency) {
+      // 根据货币自动选择对应的网关
+      const recommendedGateway = productParams.currency === 'CNY' ? 'alipay' : 'creem';
+      setSelectedGateway(recommendedGateway);
+    }
+  }, [productParams?.currency]);
+
   // 处理邮箱输入变化
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -318,6 +327,7 @@ const CheckoutPage: React.FC = () => {
                   selectedGateway={selectedGateway}
                   onGatewayChange={setSelectedGateway}
                   disabled={state.loading}
+                  orderCurrency={productParams.currency}
                 />
               </div>
 

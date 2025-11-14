@@ -4,6 +4,9 @@
 
 import React from 'react';
 import type { PaymentGateway } from '../../types/payment';
+import type { Currency } from '../../types/product';
+import { getGatewaysByCurrency } from '../../utils/payment-api';
+import type { PaymentGatewayInfo } from '../../utils/payment-api';
 
 /**
  * 支付方式配置
@@ -26,6 +29,55 @@ interface PaymentMethodsProps {
   selectedGateway: PaymentGateway;
   onGatewayChange: (gateway: PaymentGateway) => void;
   disabled?: boolean;
+  orderCurrency?: Currency;  // 新增：订单货币，用于筛选支付方式
+}
+
+/**
+ * 支付方式配置常量
+ */
+const PAYMENT_METHOD_CONFIGS = {
+  alipay: {
+    id: 'alipay' as const,
+    name: 'alipay',
+    displayName: '支付宝',
+    description: '安全便捷的移动支付',
+    icon: '支',
+    iconBg: 'bg-blue-500',
+    recommended: true,
+    features: ['扫码支付', '账户余额支付', '银行卡支付']
+  },
+  creem: {
+    id: 'creem' as const,
+    name: 'creem',
+    displayName: 'Creem',
+    description: '国际支付解决方案',
+    icon: 'C',
+    iconBg: 'bg-green-500',
+    recommended: true,
+    features: ['国际信用卡', 'PayPal', '加密货币']
+  }
+} as const;
+
+/**
+ * 根据货币获取支付方式配置
+ */
+function getPaymentMethodsByCurrency(orderCurrency?: Currency): PaymentMethodConfig[] {
+  // 基础支付方式配置
+  const baseMethods: PaymentMethodConfig[] = [
+    PAYMENT_METHOD_CONFIGS.alipay,
+    PAYMENT_METHOD_CONFIGS.creem
+  ];
+
+  // 根据订单货币筛选
+  if (orderCurrency === 'CNY') {
+    return baseMethods.filter(m => m.id === 'alipay');
+  }
+  if (orderCurrency === 'USD') {
+    return baseMethods.filter(m => m.id === 'creem');
+  }
+
+  // 如果没有指定货币，返回所有支付方式
+  return baseMethods;
 }
 
 /**
@@ -34,21 +86,30 @@ interface PaymentMethodsProps {
 const PaymentMethods: React.FC<PaymentMethodsProps> = ({
   selectedGateway,
   onGatewayChange,
-  disabled = false
+  disabled = false,
+  orderCurrency
 }) => {
-  // 支付方式配置
-  const paymentMethods: PaymentMethodConfig[] = [
-    {
-      id: 'alipay',
-      name: 'alipay',
-      displayName: '支付宝',
-      description: '安全便捷的移动支付',
-      icon: '支',
-      iconBg: 'bg-blue-500',
-      recommended: true,
-      features: ['扫码支付', '账户余额支付', '银行卡支付']
+  // 根据订单货币获取支付方式配置
+  const paymentMethods = getPaymentMethodsByCurrency(orderCurrency);
+
+  // 使用 ref 跟踪用户是否手动选择过
+  const userSelectedRef = React.useRef(false);
+
+  // 自动选中推荐的支付方式（仅在初始化时）
+  React.useEffect(() => {
+    if (orderCurrency && paymentMethods.length > 0 && !userSelectedRef.current) {
+      const recommendedMethod = paymentMethods.find(m => m.recommended);
+      if (recommendedMethod && selectedGateway !== recommendedMethod.id) {
+        console.log(`[PaymentMethods] 自动选中推荐支付方式: ${recommendedMethod.displayName}`);
+        onGatewayChange(recommendedMethod.id);
+      }
     }
-  ];
+  }, [orderCurrency, paymentMethods.length]); // 移除selectedGateway避免循环
+
+  // 当用户手动选择时，标记为已选择
+  React.useEffect(() => {
+    userSelectedRef.current = true;
+  }, [selectedGateway]);
 
   /**
    * 处理支付方式选择
@@ -64,7 +125,7 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-gray-900">选择支付方式</h2>
         <div className="text-sm text-gray-500">
-          支持多种支付方式
+          {orderCurrency ? `仅显示 ${orderCurrency} 支付方式` : '支持多种支付方式'}
         </div>
       </div>
 
@@ -147,6 +208,27 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({
           </div>
         ))}
       </div>
+
+      {/* 货币限制提示 */}
+      {orderCurrency && paymentMethods.length === 1 && (
+        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-start space-x-3">
+            <div className="flex-shrink-0">
+              <svg className="w-5 h-5 text-blue-500 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="text-sm text-blue-700">
+              <p className="font-medium mb-1">支付方式已根据货币自动筛选</p>
+              <p className="text-xs">
+                当前订单货币为 {orderCurrency}，仅显示对应的支付方式。
+                {orderCurrency === 'CNY' && ' 您可以选择支付宝进行支付。'}
+                {orderCurrency === 'USD' && ' 您可以选择 Creem 进行国际支付。'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 支付安全提示 */}
       <div className="mt-6 p-4 bg-gray-50 rounded-lg">

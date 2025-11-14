@@ -4,6 +4,7 @@ import type { Product, Currency } from '../../types/product';
 import { getProductById } from '../../services/productApi';
 import { getCurrencyPreference, convertCurrency, formatCurrency } from '../../utils/currency';
 import { buildCheckoutUrl } from '../../services/checkoutApi';
+import { getAvailableGateways, getRecommendedCurrency, type PaymentGatewayInfo } from '../../utils/payment-api';
 
 /**
  * 商品详情页面组件
@@ -15,6 +16,10 @@ const ProductDetail: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [currency, setCurrency] = useState<Currency>(getCurrencyPreference());
+  const [availableGateways, setAvailableGateways] = useState<PaymentGatewayInfo[]>([]);
+  const [showCurrencyToggle, setShowCurrencyToggle] = useState<boolean>(true);
+  const [gatewaysLoading, setGatewaysLoading] = useState<boolean>(true);
+  const [gatewayError, setGatewayError] = useState<string | null>(null);
 
   // 加载商品详情
   const fetchProduct = async (productId: string) => {
@@ -32,10 +37,45 @@ const ProductDetail: React.FC = () => {
     }
   };
 
-  // 组件挂载时加载商品详情
+  // 加载支付网关列表并设置推荐货币
+  const fetchGatewaysAndSetCurrency = async () => {
+    try {
+      setGatewaysLoading(true);
+      setGatewayError(null);
+      const gateways = await getAvailableGateways();
+      setAvailableGateways(gateways);
+
+      if (gateways.length > 0) {
+        // 根据网关推荐货币
+        const recommendedCurrency = getRecommendedCurrency(gateways);
+        setCurrency(recommendedCurrency);
+
+        // 控制货币切换按钮显示：双网关时显示，单网关时隐藏
+        setShowCurrencyToggle(gateways.length > 1);
+
+        console.log(`[ProductDetail] 加载到 ${gateways.length} 个网关，推荐货币: ${recommendedCurrency}`);
+      } else {
+        // 无网关时，使用默认行为（显示切换按钮）
+        setShowCurrencyToggle(true);
+        console.warn('[ProductDetail] 未获取到支付网关，使用默认行为');
+      }
+    } catch (error) {
+      console.error('获取支付网关失败:', error);
+      // 降级：使用默认行为，仅设置网关级错误
+      setAvailableGateways([]);
+      setShowCurrencyToggle(true);
+      setGatewayError('部分功能可能受限，请刷新重试');
+    } finally {
+      setGatewaysLoading(false);
+    }
+  };
+
+  // 组件挂载时加载商品详情和网关列表
   useEffect(() => {
     if (id) {
+      // 先加载商品，再加载网关（网关失败不影响商品浏览）
       fetchProduct(id);
+      fetchGatewaysAndSetCurrency();
     }
   }, [id]);
 
@@ -209,19 +249,55 @@ const ProductDetail: React.FC = () => {
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-lg font-medium text-gray-700">价格</span>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm text-gray-600">切换货币:</span>
-                    <button
-                      onClick={() => handleCurrencyChange(currency === 'CNY' ? 'USD' : 'CNY')}
-                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      {currency === 'CNY' ? 'USD' : 'CNY'}
-                    </button>
-                  </div>
+                  {showCurrencyToggle && !gatewaysLoading && (
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-gray-600">切换货币:</span>
+                      <button
+                        onClick={() => handleCurrencyChange(currency === 'CNY' ? 'USD' : 'CNY')}
+                        className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        {currency === 'CNY' ? 'USD' : 'CNY'}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="text-4xl font-bold text-gray-900">
                   {formatCurrency(convertedPrice, currency)}
                 </div>
+
+                {/* 支付网关提示信息 */}
+                {!gatewaysLoading && availableGateways.length > 0 && availableGateways.length === 1 && (
+                  <div className="mt-2 text-sm text-gray-600">
+                    {availableGateways[0].id === 'alipay' ? (
+                      <span>当前仅支持支付宝支付（人民币）</span>
+                    ) : (
+                      <span>当前仅支持 Creem 支付（美元）</span>
+                    )}
+                  </div>
+                )}
+
+                {/* 加载状态 */}
+                {gatewaysLoading && (
+                  <div className="mt-2 text-sm text-gray-500">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-500 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    加载支付方式...
+                  </div>
+                )}
+
+                {/* 网关加载错误提示 */}
+                {gatewayError && (
+                  <div className="mt-2 text-sm text-yellow-600 bg-yellow-50 border border-yellow-200 rounded px-3 py-2">
+                    <div className="flex items-center">
+                      <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      {gatewayError}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 库存信息 */}

@@ -5,7 +5,7 @@
 /**
  * 支付网关类型
  */
-export type PaymentGateway = 'alipay';
+export type PaymentGateway = 'alipay' | 'creem';
 
 /**
  * 订单状态

@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm'
 import { configService } from './config-service'
 import { auditService } from './audit-service'
 import { paymentGatewayManager, type CreatePaymentParams, type PaymentLink, type PaymentCallback } from './payment-gateway-service'
-import { OrderStatus, Gateway, type OrderStatusType, type GatewayType, type Order } from '../types/orders'
+import { OrderStatus, Gateway, type OrderStatusType, type GatewayType, type CurrencyType, type Order, type GatewayInfo } from '../types/orders'
 
 /**
  * 支付服务
@@ -279,11 +279,36 @@ export class PaymentService {
   /**
    * 获取可用的支付网关列表
    */
-  async getAvailableGateways(): Promise<GatewayType[]> {
+  async getAvailableGateways(): Promise<GatewayInfo[]> {
     await this.ensureInitialized()
 
     const enabledGateways = await paymentGatewayManager.getEnabledGateways()
-    return enabledGateways.map(g => g.name as GatewayType)
+
+    // 建立货币-网关映射关系
+    const currencyGatewayMap: Record<GatewayType, CurrencyType> = {
+      alipay: 'CNY',
+      creem: 'USD'
+    }
+
+    // 转换为详细信息格式
+    const gatewayInfoList: GatewayInfo[] = enabledGateways.map(gateway => {
+      const gatewayName = gateway.name as GatewayType
+      const recommendedCurrency = currencyGatewayMap[gatewayName]
+
+      return {
+        id: gatewayName,
+        name: gatewayName,
+        displayName: gatewayName === 'alipay' ? '支付宝' : 'Creem',
+        supportedCurrencies: [recommendedCurrency],
+        recommendedCurrency,
+        isEnabled: true
+      }
+    })
+
+    // 记录日志
+    console.log(`[PaymentService] 返回 ${gatewayInfoList.length} 个可用支付网关:`, gatewayInfoList.map(g => g.id).join(', '))
+
+    return gatewayInfoList
   }
 
   /**

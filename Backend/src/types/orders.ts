@@ -28,6 +28,16 @@ export const Currency = {
 
 export type CurrencyType = typeof Currency[keyof typeof Currency]
 
+// 支付网关详细信息
+export interface GatewayInfo {
+  id: string           // 网关ID (alipay, creem)
+  name: string         // 网关标识
+  displayName: string  // 显示名称
+  supportedCurrencies: CurrencyType[]  // 支持的货币
+  recommendedCurrency: CurrencyType    // 推荐货币
+  isEnabled: boolean   // 是否启用
+}
+
 // 订单数据类型
 export interface Order {
   id: string

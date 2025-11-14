@@ -212,6 +212,7 @@ const PaymentPage: React.FC<PaymentPageProps> = () => {
               selectedGateway={selectedGateway}
               onGatewayChange={setSelectedGateway}
               disabled={!canPay}
+              orderCurrency={orderInfo?.currency as 'CNY' | 'USD' | undefined}
             />
           </div>
         )}

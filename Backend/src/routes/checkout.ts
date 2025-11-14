@@ -313,13 +313,29 @@ app.get('/payments/gateways', async (c) => {
   try {
     const gateways = await paymentService.getAvailableGateways()
 
+    // 构建货币到网关的映射关系
+    const currencyGatewayMap: Record<string, string[]> = {
+      CNY: [],
+      USD: []
+    }
+
+    gateways.forEach(gateway => {
+      gateway.supportedCurrencies.forEach(currency => {
+        if (!currencyGatewayMap[currency]) {
+          currencyGatewayMap[currency] = []
+        }
+        currencyGatewayMap[currency].push(gateway.id)
+      })
+    })
+
     return c.json({
       success: true,
       data: {
-        gateways: gateways.map(gateway => ({
-          id: gateway,
-          name: gateway === 'alipay' ? '支付宝' : 'Creem'
-        }))
+        gateways,  // 直接返回 GatewayInfo[] 格式
+        currencyGatewayMap: {
+          CNY: currencyGatewayMap.CNY || [],
+          USD: currencyGatewayMap.USD || []
+        }
       }
     })
 
