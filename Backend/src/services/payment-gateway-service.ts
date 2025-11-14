@@ -131,8 +131,8 @@ export class AlipayGateway implements IPaymentGateway {
     const publicKeyRaw = await configService.getConfig('payment', 'alipay_public_key', '', { includeEncrypted: true })
 
     // 格式化密钥为PEM格式
-    const privateKey = this.formatPrivateKey(privateKeyRaw)
-    const publicKey = this.formatPublicKey(publicKeyRaw)
+    const privateKey = privateKeyRaw.trim()
+    const publicKey = publicKeyRaw.trim()
 
     const gatewayUrl = await configService.getConfig('payment', 'alipay_gateway_url',
       'https://openapi.alipay.com/gateway.do')
@@ -152,7 +152,6 @@ export class AlipayGateway implements IPaymentGateway {
       alipayPublicKey: publicKey, // 注意字段名是 alipayPublicKey
       gateway: gatewayUrl,        // 使用 gateway 字段
       signType: 'RSA2' as const,
-      keyType: 'PKCS1' as const,  // 明确指定密钥类型为PKCS1
       timeout: await configService.getConfig('payment', 'alipay_timeout', 30000),
     }
 
@@ -195,7 +194,8 @@ export class AlipayGateway implements IPaymentGateway {
   async createPayment(params: CreatePaymentParams): Promise<PaymentLink> {
     const config = await this.loadConfig()
 
-    const gatewayOrderId = `ALIPAY_${params.orderId}_${Date.now()}`
+    // 用自己的订单号作为 out_trade_no，方便回调时直接定位订单
+    const gatewayOrderId = params.orderId
 
     // 检查是否为沙箱环境配置
     const isSandbox = config.gateway && config.gateway.includes('alipaydev.com')
@@ -209,7 +209,7 @@ export class AlipayGateway implements IPaymentGateway {
       // 沙箱环境也使用相同的SDK流程，SDK会自动处理沙箱配置
       console.log(`[AlipayGateway] ${isSandbox ? 'Sandbox' : 'Production'} environment, using SDK`)
 
-      const paymentHtml = this.sdk.pageExecute('alipay.trade.page.pay', 'POST', {
+      const paymentHtml = await this.sdk.pageExecute('alipay.trade.page.pay', 'POST', {
         bizContent: {
           out_trade_no: gatewayOrderId,
           total_amount: params.amount.toString(), // 确保是字符串
@@ -217,7 +217,8 @@ export class AlipayGateway implements IPaymentGateway {
           body: `订单号：${params.orderId}`,
           product_code: 'FAST_INSTANT_TRADE_PAY'
         },
-        returnUrl: params.returnUrl || `${process.env.FRONTEND_URL}/payment/${params.orderId}`
+        returnUrl: params.returnUrl || `${process.env.FRONTEND_URL}/payment/${params.orderId}`,
+        notifyUrl: params.notifyUrl || `${process.env.BASE_URL}/alipay_notify`,
       })
 
       await auditService.logAuditEvent({
@@ -280,8 +281,8 @@ export class AlipayGateway implements IPaymentGateway {
     const status = payload.trade_status === 'TRADE_SUCCESS' || payload.trade_status === 'TRADE_FINISHED'
       ? 'paid'
       : payload.trade_status === 'TRADE_CLOSED'
-      ? 'failed'
-      : 'pending'
+        ? 'failed'
+        : 'pending'
 
     return {
       orderId: payload.out_trade_no,
@@ -369,7 +370,7 @@ export class CreemGateway implements IPaymentGateway {
   /**
    * 加载Creem配置
    */
-  private async loadConfig(): Promise<CreemConfig> {
+  private async loadConfig(): Promise<CreemConfig | null> {
     if (this.config) {
       return this.config
     }
@@ -379,7 +380,8 @@ export class CreemGateway implements IPaymentGateway {
     const isEnabled = typeof enabled === 'string' ? enabled === 'true' : Boolean(enabled)
     console.log(`[CreemGateway] Loaded enabled = ${enabled}, parsed = ${isEnabled}, type = ${typeof enabled}`)
     if (!isEnabled) {
-      throw new Error('Creem payment gateway is disabled')
+      console.warn('[CreemGateway] Creem payment gateway is disabled')
+      return null
     }
 
     this.config = {
@@ -402,13 +404,19 @@ export class CreemGateway implements IPaymentGateway {
     try {
       const config = await this.loadConfig()
 
+      if (!config) {
+        console.warn('[CreemGateway] Creem payment gateway is disabled')
+        return false
+      }
+
       if (!config.apiKey || !config.webhookSecret) {
-        throw new Error('Missing required Creem configuration')
+        console.warn('[CreemGateway] Missing required Creem configuration')
+        return false
       }
 
       return true
     } catch (error) {
-      console.error('Creem config validation failed:', error)
+      console.warn('[CreemGateway] Config validation failed:', error)
       return false
     }
   }
@@ -506,8 +514,8 @@ export class CreemGateway implements IPaymentGateway {
     const status = payload.status === 'payment_succeeded'
       ? 'paid'
       : payload.status === 'failed' || payload.status === 'cancelled'
-      ? 'failed'
-      : 'pending'
+        ? 'failed'
+        : 'pending'
 
     return {
       orderId: payload.order_id,
@@ -584,16 +592,24 @@ export class PaymentGatewayManager {
     const results: IPaymentGateway[] = []
 
     for (const [name, gateway] of this.gateways) {
+      const startTime = Date.now()
       try {
         const isValid = await gateway.validateConfig()
+        const duration = Date.now() - startTime
+
         if (isValid) {
+          console.log(`[PaymentGatewayManager] Gateway ${name} validated successfully (${duration}ms)`)
           results.push(gateway)
+        } else {
+          console.log(`[PaymentGatewayManager] Gateway ${name} disabled or misconfigured (${duration}ms)`)
         }
       } catch (error) {
-        console.warn(`Gateway ${name} not available:`, error)
+        const duration = Date.now() - startTime
+        console.warn(`[PaymentGatewayManager] Gateway ${name} validation failed (${duration}ms):`, error)
       }
     }
 
+    console.log(`[PaymentGatewayManager] Available gateways: [${results.map(g => g.name).join(', ')}]`)
     return results
   }
 
