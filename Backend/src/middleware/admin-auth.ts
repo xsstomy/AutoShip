@@ -371,6 +371,7 @@ export async function revokeApiKey(keyId: string, revokedBy: string): Promise<bo
         revokedBy
       })
       .where(eq(schema.securityTokens.tokenId, keyId))
+      .returning({ id: schema.securityTokens.tokenId })
 
     await auditService.logAuditEvent({
       action: 'api_key_revoked',
@@ -381,7 +382,7 @@ export async function revokeApiKey(keyId: string, revokedBy: string): Promise<bo
       metadata: { revokedAt: new Date().toISOString() }
     })
 
-    return result.changes > 0
+    return result.length > 0
   } catch (error) {
     console.error('Error revoking API key:', error)
     return false
@@ -404,9 +405,10 @@ export async function cleanupExpiredKeys() {
         eq(schema.securityTokens.isActive, true),
         sql`${schema.securityTokens.expiresAt} < ${cutoffTime}`
       ))
+      .returning({ id: schema.securityTokens.tokenId })
 
-    console.log(`Deactivated ${result.changes} expired API keys`)
-    return result.changes
+    console.log(`Deactivated ${result.length} expired API keys`)
+    return result.length
   } catch (error) {
     console.error('Failed to cleanup expired API keys:', error)
     return 0

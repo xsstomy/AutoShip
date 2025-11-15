@@ -228,7 +228,7 @@ export class InventoryService {
       )
     }
 
-    let queryBuilder = db
+    let queryBuilder: any = db
       .select({
         id: schema.inventoryText.id,
         productId: schema.inventoryText.productId,
@@ -259,7 +259,7 @@ export class InventoryService {
     const items = await queryBuilder
 
     // 获取总数
-    let countQuery = db.select({ count: count() }).from(schema.inventoryText)
+    let countQuery: any = db.select({ count: count() }).from(schema.inventoryText)
     if (whereConditions.length > 0) {
       countQuery = countQuery.where(and(...whereConditions))
     }
@@ -331,8 +331,9 @@ export class InventoryService {
         eq(schema.inventoryText.id, inventoryId),
         eq(schema.inventoryText.isUsed, false) // 只能删除未使用的库存
       ))
+      .returning({ id: schema.inventoryText.id })
 
-    return result.changes > 0
+    return result.length > 0
   }
 
   /**
@@ -344,8 +345,9 @@ export class InventoryService {
         eq(schema.inventoryText.batchName, batchName),
         eq(schema.inventoryText.isUsed, false)
       ))
+      .returning({ id: schema.inventoryText.id })
 
-    return result.changes
+    return result.length
   }
 
   /**
@@ -357,8 +359,9 @@ export class InventoryService {
         eq(schema.inventoryText.isUsed, false),
         sql`${schema.inventoryText.expiresAt} <= datetime('now')`
       ))
+      .returning({ id: schema.inventoryText.id })
 
-    return result.changes
+    return result.length
   }
 
   /**
@@ -432,7 +435,7 @@ export class InventoryService {
       whereConditions.push(sql`${schema.inventoryText.usedAt} <= ${endDate}`)
     }
 
-    let queryBuilder = db
+    let queryBuilder: any = db
       .select({
         id: schema.inventoryText.id,
         productId: schema.inventoryText.productId,
@@ -461,7 +464,7 @@ export class InventoryService {
       .offset(offset)
 
     // 获取总数
-    let countQuery = db.select({ count: count() })
+    let countQuery: any = db.select({ count: count() })
       .from(schema.inventoryText)
       .where(and(...whereConditions))
 

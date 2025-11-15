@@ -375,10 +375,10 @@ export class PerformanceService {
     try {
       // SQLite性能监控
       const pragmaResults = await Promise.all([
-        db.execute('PRAGMA cache_size'),
-        db.execute('PRAGMA journal_mode'),
-        db.execute('PRAGMA synchronous'),
-        db.execute('PRAGMA temp_store'),
+        (db as any).execute('PRAGMA cache_size'),
+        (db as any).execute('PRAGMA journal_mode'),
+        (db as any).execute('PRAGMA synchronous'),
+        (db as any).execute('PRAGMA temp_store'),
       ])
 
       return {

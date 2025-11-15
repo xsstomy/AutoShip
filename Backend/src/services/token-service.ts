@@ -461,7 +461,7 @@ export class TokenService {
         })
         .where(eq(schema.securityTokens.tokenId, tokenId))
 
-      const success = result.changes > 0
+      const success = (result as unknown as any[]).length > 0
 
       if (success) {
         await auditService.logAuditEvent({
@@ -518,8 +518,8 @@ export class TokenService {
           sql`${schema.securityTokens.expiresAt} < ${now}`
         ))
 
-      console.log(`Deactivated ${result.changes} expired tokens`)
-      return result.changes
+      console.log(`Deactivated ${(result as unknown as any[]).length} expired tokens`)
+      return (result as unknown as any[]).length
     } catch (error) {
       console.error('Error cleaning up expired tokens:', error)
       return 0

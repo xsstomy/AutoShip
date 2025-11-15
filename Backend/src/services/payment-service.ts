@@ -353,7 +353,9 @@ export class PaymentService {
 
     return result[0] ? {
       ...result[0],
-      gateway: result[0].gateway as GatewayType
+      gateway: result[0].gateway as GatewayType,
+      currency: result[0].currency as any,
+      status: result[0].status as any
     } : null
   }
 

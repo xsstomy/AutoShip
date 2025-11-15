@@ -433,8 +433,9 @@ export class AuditService {
         lt(schema.adminLogs.createdAt, cutoffDate),
         sql`${schema.adminLogs.action} != 'CRITICAL_EVENT'` // 保留关键事件
       ))
+      .returning({ id: schema.adminLogs.id })
 
-    return result.changes
+    return result.length
   }
 
   /**

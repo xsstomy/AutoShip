@@ -188,28 +188,26 @@ export class ProductService {
         products = this.groupProductsWithPrices(result)
       }
     } else {
-      // 只查询产品基本信息
-      let queryBuilder = db.select().from(schema.products)
+      // 直接构建查询，避免中间变量导致类型丢失
+      products = await (async () => {
+        let query = db.select().from(schema.products)
 
-      if (whereConditions.length > 0) {
-        queryBuilder = queryBuilder.where(and(...whereConditions))
-      }
+        if (whereConditions.length > 0) {
+          query = query.where(and(...whereConditions)) as any
+        }
 
-      queryBuilder = queryBuilder
-        .orderBy(asc(schema.products.sortOrder), desc(schema.products.createdAt))
-        .limit(limit)
-        .offset(offset || (page - 1) * limit)
-
-      products = await queryBuilder
+        return await query
+          .orderBy(asc(schema.products.sortOrder), desc(schema.products.createdAt))
+          .limit(limit)
+          .offset(offset || (page - 1) * limit)
+      })()
     }
 
     // 获取总数
-    let countQuery = db.select({ count: count() }).from(schema.products)
-    if (whereConditions.length > 0) {
-      countQuery = countQuery.where(and(...whereConditions))
-    }
-
-    const totalCountResult = await countQuery
+    const countQuery = db.select({ count: count() }).from(schema.products)
+    const totalCountResult = await (whereConditions.length > 0
+      ? (countQuery.where(and(...whereConditions)) as any)
+      : countQuery)
     const total = totalCountResult[0].count
 
     return {
@@ -270,7 +268,7 @@ export class ProductService {
       const result = await tx.delete(schema.products)
         .where(eq(schema.products.id, productId))
 
-      return result.changes > 0
+      return result.length > 0
     })
   }
 
@@ -332,8 +330,9 @@ export class ProductService {
   async deleteProductPrice(priceId: number) {
     const result = await db.delete(schema.productPrices)
       .where(eq(schema.productPrices.id, priceId))
+      .returning({ id: schema.productPrices.id })
 
-    return result.changes > 0
+    return (result as any[]).length > 0
   }
 
   /**
@@ -455,7 +454,7 @@ export class ProductService {
     let query = db.select({ count: count() }).from(schema.products)
 
     if (condition) {
-      query = query.where(condition)
+      ;(query as any) = (query as any).where(condition)
     }
 
     const result = await query

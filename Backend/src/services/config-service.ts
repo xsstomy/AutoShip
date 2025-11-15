@@ -363,8 +363,9 @@ export class ConfigService {
           eq(schema.config.groupKey, groupKey),
           eq(schema.config.configKey, configKey)
         ))
+        .returning({ id: schema.config.id })
 
-      const success = result.changes > 0
+      const success = result.length > 0
 
       if (success) {
         // 清除缓存

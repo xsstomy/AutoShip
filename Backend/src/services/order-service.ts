@@ -179,26 +179,27 @@ export class OrderService {
       )
     }
 
-    let queryBuilder = db.select().from(schema.orders)
+    // 直接构建查询，避免中间变量导致类型丢失
+    const orders = await (async () => {
+      let query = db.select().from(schema.orders)
 
-    if (whereConditions.length > 0) {
-      queryBuilder = queryBuilder.where(and(...whereConditions))
-    }
+      if (whereConditions.length > 0) {
+        query = query.where(and(...whereConditions)) as any
+      }
 
-    queryBuilder = queryBuilder
-      .orderBy(desc(schema.orders.createdAt))
-      .limit(limit)
-      .offset(offset || (page - 1) * limit)
-
-    const orders = await queryBuilder
+      return await query
+        .orderBy(desc(schema.orders.createdAt))
+        .limit(limit)
+        .offset(offset || (page - 1) * limit)
+    })()
 
     // 获取总数
-    let countQuery = db.select({ count: count() }).from(schema.orders)
-    if (whereConditions.length > 0) {
-      countQuery = countQuery.where(and(...whereConditions))
-    }
+    const countQuery = db.select({ count: count() }).from(schema.orders)
 
-    const totalCountResult = await countQuery
+    const totalCountResult = await (whereConditions.length > 0
+      ? (countQuery.where(and(...whereConditions)) as any)
+      : countQuery)
+
     const total = totalCountResult[0].count
 
     return {
@@ -315,7 +316,7 @@ export class OrderService {
     })
 
     if (whereConditions.length > 0) {
-      queryBuilder = queryBuilder.where(and(...whereConditions))
+      ;(queryBuilder as any) = (queryBuilder as any).where(and(...whereConditions))
     }
 
     // 按状态分组统计
@@ -589,38 +590,37 @@ export class OrderService {
       )
     }
 
-    let queryBuilder = db
-      .select({
-        order: schema.orders,
-        product: schema.products,
-      })
-      .from(schema.orders)
-      .leftJoin(schema.products, eq(schema.orders.productId, schema.products.id))
-
-    if (whereConditions.length > 0) {
-      queryBuilder = queryBuilder.where(and(...whereConditions))
-    }
-
     // 排序
     const orderByField = sortBy === 'createdAt' ? schema.orders.createdAt :
                          sortBy === 'amount' ? schema.orders.amount :
                          sortBy === 'status' ? schema.orders.status :
                          schema.orders.createdAt
 
-    queryBuilder = sortOrder === 'desc'
-      ? queryBuilder.orderBy(desc(orderByField))
-      : queryBuilder.orderBy(asc(orderByField))
+    // 直接构建查询，避免中间变量导致类型丢失
+    const orders = await (async () => {
+      let query = db
+        .select({
+          order: schema.orders,
+          product: schema.products,
+        })
+        .from(schema.orders)
+        .leftJoin(schema.products, eq(schema.orders.productId, schema.products.id))
 
-    queryBuilder = queryBuilder.limit(limit).offset(offset)
+      if (whereConditions.length > 0) {
+        query = query.where(and(...whereConditions)) as any
+      }
 
-    const orders = await queryBuilder
+      query = query.orderBy(sortOrder === 'desc' ? desc(orderByField) : asc(orderByField)) as any
+      query = query.limit(limit).offset(offset) as any
+
+      return await query
+    })()
 
     // 获取总数
-    let countQuery = db.select({ count: count() }).from(schema.orders)
-    if (whereConditions.length > 0) {
-      countQuery = countQuery.where(and(...whereConditions))
-    }
-    const totalCountResult = await countQuery
+    const countQuery = db.select({ count: count() }).from(schema.orders)
+    const totalCountResult = await (whereConditions.length > 0
+      ? (countQuery.where(and(...whereConditions)) as any)
+      : countQuery)
     const total = totalCountResult[0].count
 
     // 转换数据格式，将 order 和 product 合并为扁平结构

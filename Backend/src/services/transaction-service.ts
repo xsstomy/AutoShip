@@ -320,7 +320,7 @@ export class TransactionService {
       const result = await db.delete(schema.inventoryText)
         .where(and(...whereConditions))
 
-      return result.changes
+      return (result as unknown as any[]).length
     })
   }
 
@@ -340,7 +340,7 @@ export class TransactionService {
           ))
           .returning()
 
-        if (result.length > 0) {
+        if ((result as unknown as any[]).length > 0) {
           results.push(result[0])
         } else {
           // 如果价格不存在，创建新的

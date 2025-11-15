@@ -139,7 +139,7 @@ export class BackupService {
    */
   private async exportTable(tableName: string) {
     try {
-      const result = await db.execute(`SELECT * FROM ${tableName}`)
+      const result = await (db as any).execute(`SELECT * FROM ${tableName}`)
       const records = (result as any) || []
 
       return {
@@ -319,7 +319,7 @@ export class BackupService {
     try {
       // 如果覆盖，先清空表
       if (overwrite) {
-        await db.execute(`DELETE FROM ${tableName}`)
+        await (db as any).execute(`DELETE FROM ${tableName}`)
         console.log(`Cleared table: ${tableName}`)
       }
 
@@ -362,7 +362,7 @@ export class BackupService {
 
     const sql = `INSERT INTO ${tableName} (${fields.join(', ')}) VALUES (${placeholders})`
 
-    await db.execute(sql, values)
+    await (db as any).execute(sql, values)
   }
 
   /**

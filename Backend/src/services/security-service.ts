@@ -352,8 +352,8 @@ export class SecurityService {
 
       for (const table of tables) {
         try {
-          const countResult = await db.execute(`SELECT COUNT(*) as count FROM ${table}`)
-          const latestResult = await db.execute(`SELECT MAX(created_at) as latest FROM ${table}`)
+          const countResult = await (db as any).execute(`SELECT COUNT(*) as count FROM ${table}`)
+          const latestResult = await (db as any).execute(`SELECT MAX(created_at) as latest FROM ${table}`)
 
           digest.tables[table] = {
             count: (countResult as any)[0]?.count || 0,
@@ -408,7 +408,7 @@ export class SecurityService {
     const conditions = Object.keys(condition).map(key => `${key} = ?`).join(' AND ')
     const values = Object.values(condition)
 
-    return db.execute(query + conditions, values).then(result => (result as any).changes)
+    return (db as any).execute(query + conditions, values).then(result => (result as any).changes)
   }
 }
 

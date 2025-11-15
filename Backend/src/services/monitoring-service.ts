@@ -74,7 +74,7 @@ export class MonitoringService {
    */
   private async getTableCount(tableName: string): Promise<number> {
     try {
-      const result = await db.execute(`SELECT COUNT(*) as count FROM ${tableName}`)
+      const result = await (db as any).execute(`SELECT COUNT(*) as count FROM ${tableName}`)
       return (result as any)[0]?.count || 0
     } catch (error) {
       console.error(`Failed to get count for table ${tableName}:`, error)
@@ -87,7 +87,7 @@ export class MonitoringService {
    */
   private async getIndexStats() {
     try {
-      const result = await db.execute(`
+      const result = await (db as any).execute(`
         SELECT
           name as indexName,
           tbl_name as tableName,
@@ -163,18 +163,14 @@ export class MonitoringService {
       whereConditions.push(eq(schema.adminLogs.success, success))
     }
 
+    let queryBuilder = db.select().from(schema.adminLogs)
+
     if (startDate) {
-      whereConditions.push(`${schema.adminLogs.createdAt} >= '${startDate}'`)
+      ;(queryBuilder as any) = (queryBuilder as any).where(sql`${schema.adminLogs.createdAt} >= ${startDate}`)
     }
 
     if (endDate) {
-      whereConditions.push(`${schema.adminLogs.createdAt} <= '${endDate}'`)
-    }
-
-    let queryBuilder = db.select().from(schema.adminLogs)
-
-    if (whereConditions.length > 0) {
-      queryBuilder = queryBuilder.where(and(...whereConditions))
+      ;(queryBuilder as any) = (queryBuilder as any).where(sql`${schema.adminLogs.createdAt} <= ${endDate}`)
     }
 
     const logs = await queryBuilder
@@ -184,8 +180,13 @@ export class MonitoringService {
 
     // 获取总数
     let countQuery = db.select({ count: count() }).from(schema.adminLogs)
-    if (whereConditions.length > 0) {
-      countQuery = countQuery.where(and(...whereConditions))
+
+    if (startDate) {
+      ;(countQuery as any) = (countQuery as any).where(sql`${schema.adminLogs.createdAt} >= ${startDate}`)
+    }
+
+    if (endDate) {
+      ;(countQuery as any) = (countQuery as any).where(sql`${schema.adminLogs.createdAt} <= ${endDate}`)
     }
 
     const totalCountResult = await countQuery
@@ -208,15 +209,17 @@ export class MonitoringService {
    * 获取操作统计
    */
   async getOperationStats(startDate?: string, endDate?: string) {
-    let whereConditions = []
+    const conditions = []
 
     if (startDate) {
-      whereConditions.push(`${schema.adminLogs.createdAt} >= '${startDate}'`)
+      conditions.push(sql`${schema.adminLogs.createdAt} >= ${startDate}`)
     }
 
     if (endDate) {
-      whereConditions.push(`${schema.adminLogs.createdAt} <= '${endDate}'`)
+      conditions.push(sql`${schema.adminLogs.createdAt} <= ${endDate}`)
     }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
     // 按操作类型统计（简化：移除成功率计算）
     const actionStats = await db.select({
@@ -224,7 +227,7 @@ export class MonitoringService {
       count: count(schema.adminLogs.id),
     })
       .from(schema.adminLogs)
-      .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+      .where(whereClause)
       .groupBy(schema.adminLogs.action)
 
     // 按资源类型统计
@@ -233,7 +236,7 @@ export class MonitoringService {
       count: count(schema.adminLogs.id),
     })
       .from(schema.adminLogs)
-      .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+      .where(whereClause)
       .groupBy(schema.adminLogs.resourceType)
 
     // 按管理员统计
@@ -243,7 +246,7 @@ export class MonitoringService {
       lastActivity: schema.adminLogs.createdAt,
     })
       .from(schema.adminLogs)
-      .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+      .where(whereClause)
       .groupBy(schema.adminLogs.adminEmail)
       .orderBy(desc(count(schema.adminLogs.id)))
 
@@ -252,7 +255,7 @@ export class MonitoringService {
       total: count(schema.adminLogs.id),
     })
       .from(schema.adminLogs)
-      .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+      .where(whereClause)
 
     const successResult = await db.select({
       successful: count(schema.adminLogs.id),
@@ -260,7 +263,7 @@ export class MonitoringService {
       .from(schema.adminLogs)
       .where(and(
         eq(schema.adminLogs.success, true),
-        ...whereConditions
+        ...conditions
       ))
 
     const failedResult = await db.select({
@@ -269,7 +272,7 @@ export class MonitoringService {
       .from(schema.adminLogs)
       .where(and(
         eq(schema.adminLogs.success, false),
-        ...whereConditions
+        ...conditions
       ))
 
     const totalStats = {
@@ -296,9 +299,10 @@ export class MonitoringService {
     const cutoffDate = new Date(Date.now() - daysToKeep * 24 * 60 * 60 * 1000).toISOString()
 
     const result = await db.delete(schema.adminLogs)
-      .where(`${schema.adminLogs.createdAt} < '${cutoffDate}'`)
+      .where(sql`${schema.adminLogs.createdAt} < ${cutoffDate}`)
+      .returning({ id: schema.adminLogs.id })
 
-    return result.changes
+    return (result as unknown as any[]).length
   }
 
   /**
@@ -326,7 +330,7 @@ export class MonitoringService {
     try {
       // 检查数据库连接
       const startTime = Date.now()
-      await db.execute('SELECT 1')
+      await (db as any).execute('SELECT 1')
       const responseTime = Date.now() - startTime
 
       health.database.connected = true
@@ -378,7 +382,7 @@ export class MonitoringService {
 
     try {
       // 按日期分组统计订单
-      const dailyOrders = await db.execute(`
+      const dailyOrders = await (db as any).execute(`
         SELECT
           date(created_at) as date,
           COUNT(*) as totalOrders,
@@ -392,7 +396,7 @@ export class MonitoringService {
       `)
 
       // 按状态统计
-      const statusStats = await db.execute(`
+      const statusStats = await (db as any).execute(`
         SELECT
           status,
           COUNT(*) as count,

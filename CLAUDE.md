@@ -257,3 +257,4 @@ logger.error('Payment failed', {
 ---
 
 **重要提醒**：以上规范基于 2025-11-14 的代码审查结果制定。更多详情请参考 `openspec/project.md` 中的完整文档。
+- 每次修改代码之后，执行一下 npm run build 编译一下代码，如果有错误立即修复一下

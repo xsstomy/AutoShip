@@ -523,8 +523,8 @@ export class WebhookSecurityService {
           lt(schema.paymentsRaw.createdAt, cutoffDate)
         ))
 
-      console.log(`Cleaned up ${result.changes} expired webhook records`)
-      return result.changes
+      console.log(`Cleaned up ${(result as unknown as any[]).length} expired webhook records`)
+      return (result as unknown as any[]).length
     } catch (error) {
       console.error('Error cleaning up webhook records:', error)
       return 0

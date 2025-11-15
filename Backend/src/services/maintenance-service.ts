@@ -95,11 +95,12 @@ export class MaintenanceService {
           eq(schema.orders.status, OrderStatus.PENDING),
           lt(schema.orders.createdAt, timeoutDate)
         ))
+        .returning({ id: schema.orders.id })
 
-      console.log(`🧹 Cleaned up ${result.changes} expired orders`)
+      console.log(`🧹 Cleaned up ${(result as unknown as any[]).length} expired orders`)
 
       return {
-        cleaned: result.changes,
+        cleaned: (result as unknown as any[]).length,
         errors,
       }
 
@@ -125,10 +126,10 @@ export class MaintenanceService {
           lt(schema.inventoryText.expiresAt, new Date().toISOString())
         ))
 
-      console.log(`🧹 Cleaned up ${result.changes} expired inventory items`)
+      console.log(`🧹 Cleaned up ${(result as unknown as any[]).length} expired inventory items`)
 
       return {
-        cleaned: result.changes,
+        cleaned: (result as unknown as any[]).length,
         errors,
       }
 
@@ -155,10 +156,10 @@ export class MaintenanceService {
           lt(schema.paymentsRaw.createdAt, cutoffDate)
         ))
 
-      console.log(`🧹 Cleaned up ${result.changes} old payment callback records`)
+      console.log(`🧹 Cleaned up ${(result as unknown as any[]).length} old payment callback records`)
 
       return {
-        cleaned: result.changes,
+        cleaned: (result as unknown as any[]).length,
         errors,
       }
 
@@ -182,10 +183,10 @@ export class MaintenanceService {
       const result = await db.delete(schema.downloads)
         .where(lt(schema.downloads.downloadedAt, cutoffDate))
 
-      console.log(`🧹 Cleaned up ${result.changes} old download records`)
+      console.log(`🧹 Cleaned up ${(result as unknown as any[]).length} old download records`)
 
       return {
-        cleaned: result.changes,
+        cleaned: (result as unknown as any[]).length,
         errors,
       }
 
@@ -212,10 +213,10 @@ export class MaintenanceService {
           lt(schema.adminLogs.createdAt, cutoffDate)
         ))
 
-      console.log(`🧹 Cleaned up ${result.changes} old audit logs`)
+      console.log(`🧹 Cleaned up ${(result as unknown as any[]).length} old audit logs`)
 
       return {
-        cleaned: result.changes,
+        cleaned: (result as unknown as any[]).length,
         errors,
       }
 
@@ -242,10 +243,10 @@ export class MaintenanceService {
           lt(schema.deliveries.expiresAt, new Date().toISOString())
         ))
 
-      console.log(`🧹 Cleaned up ${result.changes} invalid download links`)
+      console.log(`🧹 Cleaned up ${(result as unknown as any[]).length} invalid download links`)
 
       return {
-        cleaned: result.changes,
+        cleaned: (result as unknown as any[]).length,
         errors,
       }
 
@@ -265,8 +266,8 @@ export class MaintenanceService {
 
     try {
       // SQLite优化命令
-      await db.execute('VACUUM')
-      await db.execute('ANALYZE')
+      await (db as any).execute('VACUUM')
+      await (db as any).execute('ANALYZE')
 
       console.log('🔧 Database optimized (VACUUM + ANALYZE)')
 
@@ -361,7 +362,7 @@ export class MaintenanceService {
 
     try {
       // 检查外键完整性
-      const foreignKeyCheck = await db.execute('PRAGMA foreign_key_check')
+      const foreignKeyCheck = await (db as any).execute('PRAGMA foreign_key_check')
       if ((foreignKeyCheck as any).length > 0) {
         issues.push('Foreign key constraints violated')
         recommendations.push('Run database integrity check')
@@ -371,7 +372,7 @@ export class MaintenanceService {
       const tables = ['products', 'orders', 'deliveries', 'inventory_text']
       for (const table of tables) {
         try {
-          await db.execute(`SELECT COUNT(*) FROM ${table}`)
+          await (db as any).execute(`SELECT COUNT(*) FROM ${table}`)
         } catch (error) {
           issues.push(`Table ${table} is corrupted or missing`)
           recommendations.push(`Recreate or repair table ${table}`)
@@ -379,15 +380,15 @@ export class MaintenanceService {
       }
 
       // 检查索引
-      const indexCheck = await db.execute('PRAGMA index_list(products)')
+      const indexCheck = await (db as any).execute('PRAGMA index_list(products)')
       if ((indexCheck as any).length === 0) {
         issues.push('Missing indexes on critical tables')
         recommendations.push('Create missing indexes for performance')
       }
 
       // 检查数据库大小
-      const pageCount = await db.execute('PRAGMA page_count')
-      const pageSize = await db.execute('PRAGMA page_size')
+      const pageCount = await (db as any).execute('PRAGMA page_count')
+      const pageSize = await (db as any).execute('PRAGMA page_size')
       const dbSize = (pageCount as any)[0]?.page_count * (pageSize as any)[0]?.page_size || 0
       const dbSizeMB = dbSize / (1024 * 1024)
 

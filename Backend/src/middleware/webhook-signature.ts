@@ -332,9 +332,10 @@ export async function cleanupExpiredWebhooks() {
         eq(schema.paymentsRaw.processed, true),
         lt(schema.paymentsRaw.createdAt, cutoffTime.toISOString())
       ))
+      .returning({ id: schema.paymentsRaw.id })
 
-    console.log(`Cleaned up ${result.changes} expired webhook records`)
-    return result.changes
+    console.log(`Cleaned up ${result.length} expired webhook records`)
+    return result.length
   } catch (error) {
     console.error('Failed to cleanup expired webhooks:', error)
     return 0

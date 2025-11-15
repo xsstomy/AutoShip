@@ -16,14 +16,21 @@ const client = createClient({
 // 创建Drizzle实例
 export const db = drizzle(client, { schema })
 
-// 添加 execute 方法支持原始 SQL 查询
+// 添加 execute 方法支持原始 SQL 查询，返回兼容 better-sqlite3 的 ResultSet
 ;(db as any).execute = async (sql: string, params?: any[]) => {
   try {
     const result = await client.execute({
       sql,
-      params: params || []
+      args: params || []
     })
-    return result.rows
+
+    // 转换为兼容 better-sqlite3 的 ResultSet 格式
+    return {
+      rows: result.rows,
+      length: result.rows.length,
+      changes: result.rowsAffected,
+      rowsAffected: result.rowsAffected
+    }
   } catch (error) {
     throw error
   }
@@ -680,8 +687,8 @@ export class BaseRepository<T extends Record<string, any>> {
   }
 
   async delete(id: string | number): Promise<boolean> {
-    const result = await db.delete(this.table).where(eq(this.table.id, id))
-    return result.changes > 0
+    const result = await db.delete(this.table).where(eq(this.table.id, id)).returning({ id: this.table.id })
+    return result.length > 0
   }
 
   async count(conditions: Partial<T> = {}): Promise<number> {

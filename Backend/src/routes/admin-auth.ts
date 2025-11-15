@@ -495,7 +495,7 @@ app.post('/change-password', async (c) => {
 
     if (!isCurrentPasswordValid) {
       await db.insert(schema.adminAuditLogs).values({
-        adminId: admin.id,
+        adminId: Number(admin.id),
         eventType: AdminEventType.PASSWORD_CHANGE,
         eventCategory: AdminEventCategory.AUTH,
         severity: 'warning',
@@ -524,7 +524,7 @@ app.post('/change-password', async (c) => {
 
     // 记录密码修改
     await db.insert(schema.adminAuditLogs).values({
-      adminId: admin.id,
+      adminId: Number(admin.id),
       eventType: AdminEventType.PASSWORD_CHANGE,
       eventCategory: AdminEventCategory.SECURITY,
       severity: 'info',

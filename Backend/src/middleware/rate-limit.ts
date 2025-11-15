@@ -328,9 +328,10 @@ export async function cleanupExpiredRateLimits() {
         lt(schema.rateLimits.updatedAt, cutoffTime.toISOString()),
         eq(schema.rateLimits.violationCount, 0) // 只清理没有违规的记录
       ))
+      .returning({ id: schema.rateLimits.id })
 
-    console.log(`Cleaned up ${result.changes} expired rate limit records`)
-    return result.changes
+    console.log(`Cleaned up ${result.length} expired rate limit records`)
+    return result.length
   } catch (error) {
     console.error('Failed to cleanup expired rate limits:', error)
     return 0
