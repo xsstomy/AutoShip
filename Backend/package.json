@@ -9,13 +9,14 @@
         "start": "node dist/index.js",
         "pm2:start": "pm2 start ecosystem.config.js",
         "pm2:stop": "pm2 stop autoship-backend",
-        "pm2:restart": "pm2 restart autoship-backend",
+        "pm2:restart": "pm2 restart autoship-backend --update-env",
         "pm2:reload": "pm2 reload autoship-backend",
         "pm2:delete": "pm2 delete autoship-backend",
         "pm2:logs": "pm2 logs autoship-backend",
         "pm2:monitor": "pm2 monit",
         "pm2:status": "pm2 status",
-        "pm2:start:prod": "pm2 start ecosystem.config.js --env production"
+        "pm2:start:prod": "pm2 start ecosystem.config.js --env production",
+        "deploy": "git pull && npm ci && npm run build && pm2 reload ecosystem.config.js --update-env --env production"
     },
     "keywords": [],
     "author": "",
