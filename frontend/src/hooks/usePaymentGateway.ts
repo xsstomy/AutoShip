@@ -100,133 +100,33 @@ export const usePaymentGateway = (): UsePaymentGatewayReturn => {
 
       if (isHtmlForm) {
         // 如果返回的是HTML表单，直接在新窗口中打开
-        const windowName = generatePaymentWindowName(gateway, orderId);
-        const windowFeatures = 'width=800,height=600,scrollbars=yes,resizable=yes,location=yes,menubar=no';
+        const htmlContent =
+          response.data.paymentUrl.trim().startsWith('<!DOCTYPE') ||
+            response.data.paymentUrl.trim().startsWith('<html')
+            ? response.data.paymentUrl
+            : `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>支付宝支付</title>
+          </head>
+          <body>
+            ${response.data.paymentUrl}
+          </body>
+        </html>
+      `;
 
-        // 创建新窗口
-        const newWindow = window.open('', windowName, windowFeatures);
+        // 使用当前窗口
+        document.open();
+        document.write(htmlContent);
+        document.close();
 
-        if (!newWindow) {
-          throw new Error('无法打开支付窗口，请检查浏览器弹窗设置');
-        }
-
-        // 直接写入支付宝返回的HTML表单到新窗口
-        // 支付宝的HTML表单可能需要手动提交
-        console.log('[PaymentGateway] Opening payment window with HTML form', {
-          windowName,
-          htmlLength: response.data.paymentUrl.length,
-          htmlStartsWithForm: response.data.paymentUrl.trim().startsWith('<form'),
-          hasSubmitScript: response.data.paymentUrl.includes('submit') || response.data.paymentUrl.includes('autoSubmit')
-        });
-
-        // 写入HTML内容到新窗口
-        // 如果HTML不包含完整的HTML结构，添加包装
-        const htmlContent = response.data.paymentUrl.trim().startsWith('<!DOCTYPE') ||
-                           response.data.paymentUrl.trim().startsWith('<html')
-          ? response.data.paymentUrl
-          : `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="utf-8">
-              <title>支付宝支付</title>
-            </head>
-            <body>
-              ${response.data.paymentUrl}
-            </body>
-            </html>
-          `;
-
-        newWindow.document.open();
-        newWindow.document.write(htmlContent);
-        newWindow.document.close();
-
-        // 等待窗口加载完成后，查找并提交表单
-        setTimeout(() => {
-          try {
-            const forms = newWindow.document.forms;
-            if (forms.length > 0) {
-              const form = forms[0];
-              console.log('[PaymentGateway] Submitting payment form, form details:', {
-                formCount: forms.length,
-                formAction: form.action,
-                formMethod: form.method,
-                inputCount: form.elements.length
-              });
-              // 提交表单
-              form.submit();
-              console.log('[PaymentGateway] Payment form submitted successfully');
-            } else {
-              console.error('[PaymentGateway] No form found in payment window');
-            }
-          } catch (error) {
-            console.error('[PaymentGateway] Error submitting payment form:', error);
-          }
-        }, 100); // 延迟100ms确保HTML已解析
-
-        console.log('[PaymentGateway] HTML form written to payment window successfully');
-        setPaymentWindow(newWindow);
-
-        // 监听支付窗口关闭事件
-        const checkClosed = setInterval(() => {
-          if (newWindow?.closed) {
-            clearInterval(checkClosed);
-            setPaymentWindow(null);
-          }
-        }, 1000);
-
-        // 5分钟后自动清理监听器
-        setTimeout(() => {
-          clearInterval(checkClosed);
-        }, 5 * 60 * 1000);
-
+        // 表单里一般已经带 auto submit 的脚本了，不写也可以
         return response;
       } else {
-        // 如果是标准URL，按照原有逻辑处理
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-          navigator.userAgent
-        );
-
-        let newWindow: Window | null = null;
-
-        try {
-          if (isMobile) {
-            // 移动设备：直接跳转到支付页面
-            window.location.href = response.data.paymentUrl;
-            return response;
-          } else {
-            // 桌面设备：在新窗口中打开支付页面
-            const windowName = generatePaymentWindowName(gateway, orderId);
-            const windowFeatures = 'width=800,height=600,scrollbars=yes,resizable=yes,location=yes,menubar=no';
-
-            newWindow = window.open(response.data.paymentUrl, windowName, windowFeatures);
-
-            if (!newWindow) {
-              throw new Error('无法打开支付窗口，请检查浏览器弹窗设置');
-            }
-
-            setPaymentWindow(newWindow);
-
-            // 监听支付窗口关闭事件
-            const checkClosed = setInterval(() => {
-              if (newWindow?.closed) {
-                clearInterval(checkClosed);
-                setPaymentWindow(null);
-              }
-            }, 1000);
-
-            // 5分钟后自动清理监听器
-            setTimeout(() => {
-              clearInterval(checkClosed);
-            }, 5 * 60 * 1000);
-          }
-        } catch (windowError) {
-          console.error('Failed to open payment window:', windowError);
-          // 如果打开新窗口失败，在当前窗口跳转
-          window.location.href = response.data.paymentUrl;
-          return response;
-        }
-
+        // 不区分手机/桌面，一律当前窗口跳转
+        window.location.href = response.data.paymentUrl;
         return response;
       }
     } catch (err) {

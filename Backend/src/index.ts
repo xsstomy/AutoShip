@@ -12,6 +12,7 @@ import adminProductRoutes from './routes/admin-products'
 import adminInventoryRoutes from './routes/admin-inventory'
 import adminOrderRoutes from './routes/admin-orders'
 import productRoutes from './routes/products'
+import testPaymentRoutes from './routes/test-payment'
 import { initDatabase } from './db'
 
 const app = new Hono()
@@ -42,13 +43,18 @@ app.route('/api/v1/admin', adminProductRoutes)
 app.route('/api/v1/admin', adminInventoryRoutes)
 app.route('/api/v1/admin', adminOrderRoutes)
 
+// Test routes (仅开发环境使用)
+app.route('/api/test', testPaymentRoutes)
+
 // Initialize database
 console.log('Initializing database...')
 initDatabase()
 
-console.log('Server starting on port 3000...')
+const port = Number(process.env.PORT) || 3100
+
+console.log(`Server starting on port ${port}...`)
 
 serve({
   fetch: app.fetch,
-  port: 3000,
+  port: port,
 })
