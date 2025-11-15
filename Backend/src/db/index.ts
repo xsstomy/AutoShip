@@ -1,45 +1,71 @@
-import Database from 'better-sqlite3'
-import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
+import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
 import * as schema from './schema'
 import { eq, and, desc, asc, like, count, sql } from 'drizzle-orm'
 
 // 数据库连接配置
-const DATABASE_URL = process.env.DATABASE_URL || './database.db'
+const DATABASE_URL = process.env.DATABASE_URL || 'file:./database.db'
+const LIBSQL_AUTH_TOKEN = process.env.LIBSQL_AUTH_TOKEN
 
-// 创建数据库连接
-const sqlite = new Database(DATABASE_URL)
+// 创建 libsql 客户端
+const client = createClient({
+  url: DATABASE_URL,
+  authToken: LIBSQL_AUTH_TOKEN,
+})
 
 // 创建Drizzle实例
-export const db = drizzle(sqlite, { schema })
+export const db = drizzle(client, { schema })
 
 // 添加 execute 方法支持原始 SQL 查询
-;(db as any).execute = (sql: string, params?: any[]) => {
+;(db as any).execute = async (sql: string, params?: any[]) => {
   try {
-    const stmt = sqlite.prepare(sql)
-    if (params) {
-      return stmt.all(...params)
-    }
-    return stmt.all()
+    const result = await client.execute({
+      sql,
+      params: params || []
+    })
+    return result.rows
   } catch (error) {
     throw error
   }
 }
 
-// 配置数据库性能优化
-sqlite.pragma('journal_mode = WAL')
-sqlite.pragma('synchronous = NORMAL')
-sqlite.pragma('cache_size = 1000000')
-sqlite.pragma('temp_store = MEMORY')
-sqlite.pragma('mmap_size = 268435456') // 256MB
+// 配置数据库性能优化 - 仅在本地文件系统模式下
+async function configureDatabase() {
+  if (DATABASE_URL.startsWith('file:')) {
+    try {
+      // 启用 WAL 模式
+      await client.execute('PRAGMA journal_mode = WAL')
+      // 优化同步级别
+      await client.execute('PRAGMA synchronous = NORMAL')
+      // 增大缓存
+      await client.execute('PRAGMA cache_size = 1000000')
+      // 使用内存存储临时表
+      await client.execute('PRAGMA temp_store = MEMORY')
+      // 启用内存映射
+      await client.execute('PRAGMA mmap_size = 268435456') // 256MB
+      console.log('✅ Database optimization PRAGMAs applied')
+    } catch (error) {
+      console.warn('⚠️ Some PRAGMA settings may not be supported:', error)
+    }
+  }
+}
 
 // 数据库初始化函数
 export async function initializeDatabase() {
   try {
     console.log('🗄️  Initializing database...')
 
+    // 配置数据库性能优化
+    await configureDatabase()
+
     // 启用外键约束
-    sqlite.pragma('foreign_keys = ON')
+    if (DATABASE_URL.startsWith('file:')) {
+      try {
+        await client.execute('PRAGMA foreign_keys = ON')
+      } catch (error) {
+        console.warn('⚠️ Failed to enable foreign keys:', error)
+      }
+    }
 
     // 检查并创建所有表
     await ensureTablesExist()
@@ -95,9 +121,9 @@ async function checkTablesExist(): Promise<{ allTablesExist: boolean; missingTab
 
   for (const tableName of requiredTables) {
     try {
-      sqlite.prepare(`SELECT 1 FROM ${tableName} LIMIT 1`).get()
+      await client.execute(`SELECT 1 FROM ${tableName} LIMIT 1`)
     } catch (error: any) {
-      if (error.code === 'SQLITE_ERROR' && error.message.includes('no such table')) {
+      if (error.message?.includes('no such table') || error.message?.includes('does not exist')) {
         missingTables.push(tableName)
       }
     }
@@ -114,7 +140,7 @@ async function createAllTables() {
   // 根据 schema.ts 中的定义创建所有表
 
   // Products 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS products (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -129,7 +155,7 @@ async function createAllTables() {
   `)
 
   // Product Prices 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS product_prices (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       product_id INTEGER NOT NULL,
@@ -144,7 +170,7 @@ async function createAllTables() {
   `)
 
   // Orders 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS orders (
       id TEXT PRIMARY KEY,
       product_id INTEGER NOT NULL,
@@ -168,7 +194,7 @@ async function createAllTables() {
   `)
 
   // Deliveries 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS deliveries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_id TEXT NOT NULL,
@@ -189,7 +215,7 @@ async function createAllTables() {
   `)
 
   // Downloads 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS downloads (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       delivery_id INTEGER NOT NULL,
@@ -205,7 +231,7 @@ async function createAllTables() {
   `)
 
   // Payments Raw 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS payments_raw (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       gateway TEXT NOT NULL,
@@ -223,7 +249,7 @@ async function createAllTables() {
   `)
 
   // Inventory Text 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS inventory_text (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       product_id INTEGER NOT NULL,
@@ -243,7 +269,7 @@ async function createAllTables() {
   `)
 
   // Settings 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT,
@@ -256,7 +282,7 @@ async function createAllTables() {
   `)
 
   // Admin Logs 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS admin_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       admin_email TEXT NOT NULL,
@@ -274,7 +300,7 @@ async function createAllTables() {
   `)
 
   // Files 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS files (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       file_name TEXT NOT NULL,
@@ -290,7 +316,7 @@ async function createAllTables() {
   `)
 
   // Config 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS config (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       group_key TEXT NOT NULL,
@@ -311,7 +337,7 @@ async function createAllTables() {
   `)
 
   // Audit Logs 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_type TEXT NOT NULL,
@@ -338,7 +364,7 @@ async function createAllTables() {
   `)
 
   // Rate Limits 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS rate_limits (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       limit_key TEXT NOT NULL,
@@ -357,7 +383,7 @@ async function createAllTables() {
   `)
 
   // Security Tokens 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS security_tokens (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       token_type TEXT NOT NULL,
@@ -384,7 +410,7 @@ async function createAllTables() {
   `)
 
   // Admin Users 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS admin_users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
@@ -405,7 +431,7 @@ async function createAllTables() {
   `)
 
   // Admin Sessions 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS admin_sessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       admin_id INTEGER NOT NULL,
@@ -423,7 +449,7 @@ async function createAllTables() {
   `)
 
   // Admin Audit Logs 表
-  sqlite.exec(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS admin_audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       admin_id INTEGER,
@@ -446,15 +472,15 @@ async function createAllTables() {
   `)
 
   // 创建索引（用于性能优化）
-  createIndexes()
+  await createIndexes()
 }
 
 // 创建索引
-function createIndexes() {
+async function createIndexes() {
   console.log('📇 Creating database indexes...')
 
   // Orders 索引
-  sqlite.exec(`
+  await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_orders_email ON orders(email);
     CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
     CREATE INDEX IF NOT EXISTS idx_orders_gateway ON orders(gateway);
@@ -465,13 +491,13 @@ function createIndexes() {
   `)
 
   // Products 索引
-  sqlite.exec(`
+  await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_products_active ON products(is_active);
     CREATE INDEX IF NOT EXISTS idx_products_sort_order ON products(sort_order);
   `)
 
   // Product Prices 索引
-  sqlite.exec(`
+  await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_product_prices_product ON product_prices(product_id);
     CREATE INDEX IF NOT EXISTS idx_product_prices_currency ON product_prices(currency);
     CREATE INDEX IF NOT EXISTS idx_product_prices_active ON product_prices(is_active);
@@ -479,35 +505,35 @@ function createIndexes() {
   `)
 
   // Deliveries 索引
-  sqlite.exec(`
+  await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_deliveries_order_id ON deliveries(order_id);
     CREATE INDEX IF NOT EXISTS idx_deliveries_type ON deliveries(delivery_type);
     CREATE INDEX IF NOT EXISTS idx_deliveries_active ON deliveries(is_active);
   `)
 
   // Downloads 索引
-  sqlite.exec(`
+  await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_downloads_delivery_id ON downloads(delivery_id);
     CREATE INDEX IF NOT EXISTS idx_downloads_downloaded_at ON downloads(downloaded_at);
     CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(download_status);
   `)
 
   // Inventory 索引
-  sqlite.exec(`
+  await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_inventory_product ON inventory_text(product_id);
     CREATE INDEX IF NOT EXISTS idx_inventory_used ON inventory_text(is_used);
     CREATE INDEX IF NOT EXISTS idx_inventory_order ON inventory_text(used_order_id);
   `)
 
   // Payments Raw 索引
-  sqlite.exec(`
+  await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_payments_raw_gateway ON payments_raw(gateway);
     CREATE INDEX IF NOT EXISTS idx_payments_raw_order_id ON payments_raw(gateway_order_id);
     CREATE INDEX IF NOT EXISTS idx_payments_raw_processed ON payments_raw(processed);
   `)
 
   // Security Tokens 索引
-  sqlite.exec(`
+  await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_security_token_id ON security_tokens(token_id);
     CREATE INDEX IF NOT EXISTS idx_security_token_type ON security_tokens(token_type);
     CREATE INDEX IF NOT EXISTS idx_security_associated_id ON security_tokens(associated_id);
@@ -515,14 +541,14 @@ function createIndexes() {
   `)
 
   // Admin Users 索引
-  sqlite.exec(`
+  await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_users(username);
     CREATE INDEX IF NOT EXISTS idx_admin_email ON admin_users(email);
     CREATE INDEX IF NOT EXISTS idx_admin_is_active ON admin_users(is_active);
   `)
 
   // Admin Sessions 索引
-  sqlite.exec(`
+  await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_admin_sessions_admin_id ON admin_sessions(admin_id);
     CREATE INDEX IF NOT EXISTS idx_admin_sessions_session_id ON admin_sessions(session_id);
     CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions(expires_at);
@@ -530,7 +556,7 @@ function createIndexes() {
   `)
 
   // Admin Audit Logs 索引
-  sqlite.exec(`
+  await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_admin_audit_admin_id ON admin_audit_logs(admin_id);
     CREATE INDEX IF NOT EXISTS idx_admin_audit_event_type ON admin_audit_logs(event_type);
     CREATE INDEX IF NOT EXISTS idx_admin_audit_severity ON admin_audit_logs(severity);
@@ -543,8 +569,8 @@ function createIndexes() {
 // 数据库健康检查
 export async function healthCheck() {
   try {
-    const result = sqlite.prepare('SELECT 1 as health').get()
-    return result && (result as any).health === 1
+    const result = await client.execute('SELECT 1 as health')
+    return result.rows.length > 0 && result.rows[0].health === 1
   } catch (error) {
     console.error('Database health check failed:', error)
     return false
