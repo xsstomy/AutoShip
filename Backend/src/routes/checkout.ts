@@ -6,6 +6,7 @@ import { products, productPrices, orders } from '../db/schema'
 import { eq, and } from 'drizzle-orm'
 import { paymentService } from '../services/payment-service'
 import { Gateway } from '../types/orders'
+import { CONFIG } from '../config/api'
 
 const app = new Hono()
 
@@ -138,10 +139,9 @@ app.post('/create', zValidator('json', createOrderSchema), async (c) => {
 
     // 7. 生成支付链接
     try {
-      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
       const paymentLink = await paymentService.createPayment(orderId, {
-        returnUrl: `${baseUrl}/payment/${orderId}`,
-        notifyUrl: `${process.env.BASE_URL}/webhooks/${data.gateway}`
+        returnUrl: `${CONFIG.API.FRONTEND_URL}/payment/${orderId}`,
+        notifyUrl: `${CONFIG.API.BASE_URL}/webhooks/${data.gateway}`
       })
 
       return c.json({

@@ -1,6 +1,7 @@
 // 测试支付网关配置
 import 'dotenv/config';
 import { paymentGatewayManager } from './src/services/payment-gateway-service';
+import { CONFIG } from './src/config/api';
 
 async function testPaymentGateway() {
   console.log('=== 测试支付网关配置 ===\n');
@@ -37,8 +38,8 @@ async function testPaymentGateway() {
           currency: 'CNY',
           productName: '测试商品',
           customerEmail: 'test@example.com',
-          returnUrl: process.env.FRONTEND_URL + '/payment/return',
-          notifyUrl: process.env.BASE_URL + '/webhooks/alipay'
+          returnUrl: `${CONFIG.API.FRONTEND_URL}/payment/return`,
+          notifyUrl: CONFIG.PAYMENT.ALIPAY.WEBHOOK_URL
         };
 
         const paymentLink = await alipayGateway.createPayment(paymentParams);
@@ -79,8 +80,8 @@ async function testPaymentGateway() {
           currency: 'USD',
           productName: 'Test Product',
           customerEmail: 'test@example.com',
-          returnUrl: process.env.FRONTEND_URL + '/payment/return',
-          notifyUrl: process.env.BASE_URL + '/webhooks/creem'
+          returnUrl: `${CONFIG.API.FRONTEND_URL}/payment/return`,
+          notifyUrl: CONFIG.PAYMENT.CREEM.WEBHOOK_URL
         };
 
         const paymentLink = await creemGateway.createPayment(paymentParams);

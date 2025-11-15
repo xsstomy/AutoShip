@@ -17,7 +17,7 @@ module.exports = {
       // 环境变量
       env: {
         NODE_ENV: 'production',
-        PORT: 3000,
+        PORT: 3100,
       },
 
       // 日志配置
@@ -43,7 +43,7 @@ module.exports = {
 
       // 健康检查（可选）
       health_check_grace_period: 3000,
-      health_check_url: 'http://localhost:3000/api/health',
+      health_check_url: 'http://localhost:3100/api/health',
 
       // 实例间负载均衡
       instance_var: 'INSTANCE_ID',

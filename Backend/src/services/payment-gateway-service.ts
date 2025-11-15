@@ -2,6 +2,7 @@ import { configService } from './config-service'
 import { auditService } from './audit-service'
 import { AlipaySdk, AlipaySdkConfig } from 'alipay-sdk'
 import type { OrderStatusType, GatewayType, CurrencyType } from '../types/orders'
+import { CONFIG } from '../config/api'
 
 // ==============================================
 // 支付网关接口定义
@@ -22,7 +23,7 @@ export interface GatewayConfig {
 export interface AlipayConfig extends GatewayConfig {
   appId: string
   privateKey: string
-  publicKey: string
+  alipayPublicKey: string
   gatewayUrl: string
   signType: 'RSA2'
   version?: string
@@ -150,16 +151,25 @@ export class AlipayGateway implements IPaymentGateway {
       appId,
       privateKey,
       alipayPublicKey: publicKey, // 注意字段名是 alipayPublicKey
-      gateway: gatewayUrl,        // 使用 gateway 字段
+      gatewayUrl: 'https://openapi.alipay.com/gateway.do',
       signType: 'RSA2' as const,
+      enabled: true,
       timeout: await configService.getConfig('payment', 'alipay_timeout', 30000),
     }
 
-    // 初始化SDK实例
-    this.sdk = new AlipaySdk(this.config)
+    // 初始化SDK实例 - 使用 alipay-sdk 期望的配置格式
+    const sdkConfig: AlipaySdkConfig = {
+      appId: this.config?.appId || '',
+      privateKey: this.config?.privateKey || '',
+      alipayPublicKey: this.config?.alipayPublicKey || '',
+      timeout: this.config?.timeout || 30000,
+      signType: this.config?.signType || 'RSA2',
+    }
+
+    this.sdk = new AlipaySdk(sdkConfig)
     console.log('[AlipayGateway] SDK initialized successfully')
 
-    return this.config
+    return this.config || null
   }
 
   /**
@@ -197,8 +207,8 @@ export class AlipayGateway implements IPaymentGateway {
     // 用自己的订单号作为 out_trade_no，方便回调时直接定位订单
     const gatewayOrderId = params.orderId
 
-    // 检查是否为沙箱环境配置
-    const isSandbox = config.gateway && config.gateway.includes('alipaydev.com')
+    // 检查是否为沙箱环境配置（通过环境变量判断）
+    const isSandbox = CONFIG.PAYMENT.ALIPAY.GATEWAY_URL.includes('alipaydev.com')
 
     if (!this.sdk) {
       throw new Error('Alipay SDK not initialized')
@@ -217,8 +227,8 @@ export class AlipayGateway implements IPaymentGateway {
           body: `订单号：${params.orderId}`,
           product_code: 'FAST_INSTANT_TRADE_PAY'
         },
-        returnUrl: params.returnUrl || `${process.env.FRONTEND_URL}/payment/${params.orderId}`,
-        notifyUrl: params.notifyUrl || `${process.env.BASE_URL}/alipay_notify`,
+        returnUrl: params.returnUrl || `${CONFIG.API.FRONTEND_URL}/payment/${params.orderId}`,
+        notifyUrl: params.notifyUrl || CONFIG.PAYMENT.ALIPAY.WEBHOOK_URL,
       })
 
       await auditService.logAuditEvent({
@@ -437,8 +447,8 @@ export class CreemGateway implements IPaymentGateway {
         currency: params.currency,
         description: params.productName,
         customer_email: params.customerEmail,
-        return_url: params.returnUrl || `${process.env.FRONTEND_URL}/payment/${params.orderId}`,
-        webhook_url: params.notifyUrl || `${process.env.BASE_URL}/webhooks/creem`,
+        return_url: params.returnUrl || `${CONFIG.API.FRONTEND_URL}/payment/${params.orderId}`,
+        webhook_url: params.notifyUrl || CONFIG.PAYMENT.CREEM.WEBHOOK_URL,
         metadata: {
           order_id: params.orderId
         }

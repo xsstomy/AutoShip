@@ -8,7 +8,7 @@
 const http = require('http')
 
 // 配置
-const BASE_URL = 'http://localhost:3000'
+const BASE_URL = 'http://localhost:3100'
 const TIMEOUT = 5000
 
 /**
@@ -101,7 +101,7 @@ async function runTests() {
     '基础健康检查',
     {
       hostname: 'localhost',
-      port: 3000,
+      port: 3100,
       path: '/',
       method: 'GET'
     },
@@ -115,7 +115,7 @@ async function runTests() {
     'API健康检查',
     {
       hostname: 'localhost',
-      port: 3000,
+      port: 3100,
       path: '/api/health',
       method: 'GET'
     },
@@ -129,7 +129,7 @@ async function runTests() {
     'Webhook健康检查',
     {
       hostname: 'localhost',
-      port: 3000,
+      port: 3100,
       path: '/webhooks/health',
       method: 'GET'
     },
@@ -143,7 +143,7 @@ async function runTests() {
     '获取支付网关列表',
     {
       hostname: 'localhost',
-      port: 3000,
+      port: 3100,
       path: '/api/v1/payments/gateways',
       method: 'GET',
       headers: {
@@ -160,7 +160,7 @@ async function runTests() {
     '验证商品',
     {
       hostname: 'localhost',
-      port: 3000,
+      port: 3100,
       path: '/api/v1/checkout/products/1/validate',
       method: 'GET'
     },
