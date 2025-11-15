@@ -69,7 +69,7 @@ export function rateLimit(options: RateLimitOptions = {}) {
       }
 
       // 检查是否超过限制
-      if (rateLimitRecord && rateLimitRecord.currentRequests >= maxRequests) {
+      if (rateLimitRecord && (rateLimitRecord.currentRequests ?? 0) >= maxRequests) {
         // 增加违规计数
         await incrementViolationCount(key)
 
@@ -84,9 +84,9 @@ export function rateLimit(options: RateLimitOptions = {}) {
           metadata: {
             path: c.req.path,
             method: c.req.method,
-            currentRequests: rateLimitRecord.currentRequests,
+            currentRequests: rateLimitRecord.currentRequests ?? 0,
             maxRequests,
-            violationCount: rateLimitRecord.violationCount + 1
+            violationCount: (rateLimitRecord.violationCount ?? 0) + 1
           }
         })
 
@@ -121,7 +121,7 @@ export function rateLimit(options: RateLimitOptions = {}) {
 
       // 设置响应头
       const updatedRecord = await getRateLimitRecord(key, windowSizeSeconds, maxRequests)
-      const remaining = updatedRecord ? Math.max(0, maxRequests - updatedRecord.currentRequests) : maxRequests - 1
+      const remaining = updatedRecord ? Math.max(0, maxRequests - (updatedRecord.currentRequests ?? 0)) : maxRequests - 1
 
       c.set('X-RateLimit-Limit', maxRequests.toString())
       c.set('X-RateLimit-Remaining', remaining.toString())
@@ -215,7 +215,7 @@ async function getRateLimitRecord(key: string, windowSize: number, maxRequests: 
     const record = records[0]
 
     // 检查记录是否过期，如果过期则重置
-    const recordAge = Date.now() - new Date(record.updatedAt).getTime()
+    const recordAge = Date.now() - new Date(record.updatedAt ?? new Date()).getTime()
     if (recordAge > windowSize * 1000) {
       await db.update(schema.rateLimits)
         .set({
@@ -277,7 +277,7 @@ async function incrementViolationCount(key: string) {
   try {
     const record = await getRateLimitRecord(key, 60, 100)
     if (record) {
-      const newViolationCount = record.violationCount + 1
+      const newViolationCount = (record.violationCount ?? 0) + 1
       const blockedUntil = newViolationCount >= 3 ?
         new Date(Date.now() + (Math.pow(2, newViolationCount) * 60 * 1000)).toISOString() : // 指数退避
         null

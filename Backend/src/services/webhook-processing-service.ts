@@ -134,8 +134,7 @@ export class WebhookProcessingService {
           headers,
           signatureValid: true,
           signatureMethod: verification.method,
-          processingResult: 'duplicate',
-          processed: true
+          processingResult: 'duplicate'
         })
 
         return {
@@ -502,14 +501,14 @@ export class WebhookProcessingService {
         id: r.id.toString(),
         gateway: r.gateway,
         gatewayOrderId: r.gatewayOrderId || undefined,
-        signatureValid: r.signatureValid,
+        signatureValid: r.signatureValid || false,
         signatureMethod: r.signatureMethod || 'unknown',
         payload: r.payload,
-        processed: r.processed,
+        processed: r.processed || false,
         processingAttempts: r.processingAttempts || 0,
         errorMessage: r.errorMessage || undefined,
         processedAt: r.processedAt || undefined,
-        createdAt: r.createdAt
+        createdAt: r.createdAt || ''
       })),
       total: Number(countResult[0].count)
     }

@@ -1,11 +1,10 @@
 import type { OrderFilters, FilterOptions } from '../types/orderAdmin';
+import { ADMIN_API_URL } from '../config/api';
 
 /**
  * 订单管理API服务
  */
 export class OrderAdminApi {
-  private static readonly BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
-
   private static getAuthHeaders() {
     const token = localStorage.getItem('admin_token');
     return {
@@ -30,7 +29,7 @@ export class OrderAdminApi {
     if (filters.sortBy) params.append('sortBy', filters.sortBy);
     if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
 
-    const response = await fetch(`${this.BASE_URL}/api/v1/admin/orders?${params.toString()}`, {
+    const response = await fetch(`${ADMIN_API_URL}/orders?${params.toString()}`, {
       headers: this.getAuthHeaders(),
     });
 
@@ -57,7 +56,7 @@ export class OrderAdminApi {
    * 获取筛选选项
    */
   static async getFilterOptions(): Promise<FilterOptions> {
-    const response = await fetch(`${this.BASE_URL}/api/v1/admin/orders/filter-options`, {
+    const response = await fetch(`${ADMIN_API_URL}/orders/filter-options`, {
       headers: this.getAuthHeaders(),
     });
 
@@ -78,7 +77,7 @@ export class OrderAdminApi {
    * 重发邮件
    */
   static async resendEmail(orderId: string) {
-    const response = await fetch(`${this.BASE_URL}/api/v1/admin/orders/${orderId}/resend`, {
+    const response = await fetch(`${ADMIN_API_URL}/orders/${orderId}/resend`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
     });
@@ -100,7 +99,7 @@ export class OrderAdminApi {
    * 退款
    */
   static async refundOrder(orderId: string, reason: string) {
-    const response = await fetch(`${this.BASE_URL}/api/v1/admin/orders/${orderId}/refund`, {
+    const response = await fetch(`${ADMIN_API_URL}/orders/${orderId}/refund`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ reason }),

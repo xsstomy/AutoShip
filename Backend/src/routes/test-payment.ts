@@ -100,7 +100,6 @@ app.post('/payment-success', zValidator('json', testPaymentSchema), async (c) =>
     console.log(`🧪 [Test Payment] 支付处理完成:`, {
       orderCreated: !!result.order,
       deliveryCreated: !!result.delivery,
-      inventoryAllocated: !!result.allocatedInventory,
       deliveryContent: result.delivery?.content?.substring(0, 50) + '...',
     })
 
@@ -110,7 +109,6 @@ app.post('/payment-success', zValidator('json', testPaymentSchema), async (c) =>
       orderId: orderId,
       order: result.order,
       delivery: result.delivery,
-      allocatedInventory: result.allocatedInventory,
       nextSteps: {
         // 提示前端可以跳转到发货成功页面
         redirectTo: `/payment/success?orderId=${orderId}`,
@@ -122,20 +120,23 @@ app.post('/payment-success', zValidator('json', testPaymentSchema), async (c) =>
   } catch (error) {
     console.error('🧪 [Test Payment] 错误:', error)
 
+    // 类型保护：检查 error 是否为 Error 类型
+    const errorMessage = error instanceof Error ? error.message : String(error)
+
     // 根据错误类型返回不同的错误信息
-    if (error.message?.includes('Insufficient inventory')) {
+    if (errorMessage.includes('Insufficient inventory')) {
       return errors.INTERNAL_ERROR(c, '库存不足，无法完成发货')
     }
 
-    if (error.message?.includes('Order not found')) {
+    if (errorMessage.includes('Order not found')) {
       return errors.INTERNAL_ERROR(c, '订单创建失败')
     }
 
-    if (error.message?.includes('Order is not pending')) {
+    if (errorMessage.includes('Order is not pending')) {
       return errors.INTERNAL_ERROR(c, '订单状态异常')
     }
 
-    return errors.INTERNAL_ERROR(c, `测试支付失败: ${error.message}`)
+    return errors.INTERNAL_ERROR(c, `测试支付失败: ${errorMessage}`)
   }
 })
 

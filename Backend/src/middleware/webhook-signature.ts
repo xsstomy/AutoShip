@@ -12,9 +12,14 @@ import { securityService } from '../services/security-service'
 export function webhookSignatureValidator() {
   return async (c: Context, next: Next) => {
     try {
-      const gateway = c.req.path().includes('alipay') ? 'alipay' : 'creem'
+      const gateway = c.req.path.includes('alipay') ? 'alipay' : 'creem'
       const payload = await c.req.text()
-      const headers = Object.fromEntries(c.req.header())
+      const headers: Record<string, string> = {
+        'alipay-signature': c.req.header('alipay-signature') || '',
+        'signature': c.req.header('signature') || '',
+        'x-creem-signature': c.req.header('x-creem-signature') || '',
+        'creem-signature': c.req.header('creem-signature') || ''
+      }
 
       // 记录原始webhook数据
       await logWebhookPayload(gateway, payload, headers)
@@ -104,7 +109,9 @@ export function webhookSignatureValidator() {
       }
 
       // 更新payments_raw表中的签名验证状态
-      await updateWebhookSignatureStatus(gateway, gatewayOrderId, true, signatureMethod)
+      if (gatewayOrderId) {
+        await updateWebhookSignatureStatus(gateway, gatewayOrderId, true, signatureMethod)
+      }
 
       // 记录成功验证
       await auditService.logAuditEvent({
@@ -133,7 +140,7 @@ export function webhookSignatureValidator() {
         ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown',
         userAgent: c.req.header('user-agent'),
         errorMessage: error instanceof Error ? error.message : 'Unknown error',
-        metadata: { error: error.stack }
+        metadata: { error: (error as any)?.stack }
       })
 
       c.status(500)
@@ -300,8 +307,7 @@ async function updateWebhookSignatureStatus(gateway: string, gatewayOrderId: str
       .set({
         signatureValid: isValid,
         signatureMethod: method,
-        processed: false, // 等待业务处理完成后才标记为已处理
-        updatedAt: new Date().toISOString()
+        processed: false // 等待业务处理完成后才标记为已处理
       })
       .where(and(
         eq(schema.paymentsRaw.gateway, gateway),

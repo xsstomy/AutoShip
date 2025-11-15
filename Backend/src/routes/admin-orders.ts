@@ -2,11 +2,12 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { orderService } from '../services/order-service'
 import { orderStateService } from '../services/order-state-service'
-import { paymentGatewayService } from '../services/payment-gateway-service'
+import { paymentGatewayManager } from '../services/payment-gateway-service'
 import { verifyToken, getClientIP } from '../utils/auth'
 import { AdminEventType, AdminEventCategory } from '../db/schema'
+import type { AppContext, AdminUser } from '../types/admin'
 
-const app = new Hono()
+const app = new Hono<{ Variables: { admin: AdminUser; sessionId: string } }>()
 
 // 订单筛选验证模式
 const orderQuerySchema = z.object({
@@ -288,7 +289,7 @@ app.post('/orders/:orderId/refund', requireAdminAuth, async (c) => {
       return c.json({
         success: false,
         error: '输入数据无效',
-        details: error.errors,
+        details: error.issues,
       }, 400)
     }
 

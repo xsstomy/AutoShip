@@ -69,12 +69,7 @@ export async function adminAuth(c: Context, next: Next) {
     await adminSessionRepository.updateLastActivity(payload.sessionId)
 
     // 将管理员信息附加到上下文
-    c.set('admin', {
-      id: admin.id,
-      username: admin.username,
-      email: admin.email,
-      role: admin.role,
-    } as AdminUser)
+    c.set('admin', (admin as any) as AdminUser)
 
     c.set('sessionId', payload.sessionId)
 
@@ -142,12 +137,7 @@ export async function optionalAdminAuth(c: Context, next: Next) {
           const admin = await adminUserRepository.findById(payload.adminId)
 
           if (admin && admin.isActive) {
-            c.set('admin', {
-              id: admin.id,
-              username: admin.username,
-              email: admin.email,
-              role: admin.role,
-            } as AdminUser)
+            c.set('admin', (admin as any) as AdminUser)
 
             c.set('sessionId', payload.sessionId)
           }

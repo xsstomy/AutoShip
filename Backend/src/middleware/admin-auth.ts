@@ -1,6 +1,7 @@
 import { Context, Next } from 'hono'
+import crypto from 'crypto'
 import { db, schema } from '../db'
-import { eq, and, lt } from 'drizzle-orm'
+import { eq, and, lt, sql } from 'drizzle-orm'
 import { auditService } from '../services/audit-service'
 import { securityService } from '../services/security-service'
 
@@ -94,16 +95,16 @@ export function adminAuth(options: {
 
       // 检查权限（如果需要）
       if (permissions.length > 0) {
-        const hasPermission = await checkPermissions(authResult.keyId, permissions)
+        const hasPermission = await checkPermissions(authResult.keyId!, permissions)
 
         if (!hasPermission) {
           await auditService.logAuditEvent({
             action: 'admin_auth_permission_denied',
             resourceType: 'admin_api',
-            resourceId: authResult.keyId,
+            resourceId: authResult.keyId!,
             success: false,
             ipAddress: getClientIP(c),
-            userAgent: c.req.header('user-agent'),
+            userAgent: c.req.header('user-agent') || '',
             errorMessage: 'Insufficient permissions',
             metadata: { requiredPermissions: permissions, path: c.req.path, method: c.req.method }
           })
@@ -118,7 +119,7 @@ export function adminAuth(options: {
       }
 
       // 更新密钥使用情况
-      await updateKeyUsage(authResult.keyId, getClientIP(c), c.req.header('user-agent'))
+      await updateKeyUsage(authResult.keyId!, getClientIP(c), c.req.header('user-agent') || '')
 
       // 记录成功的认证
       await auditService.logAuditEvent({
@@ -140,7 +141,7 @@ export function adminAuth(options: {
       })
 
       await next()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Admin authentication error:', error)
 
       await auditService.logAuditEvent({
@@ -148,7 +149,7 @@ export function adminAuth(options: {
         resourceType: 'admin_api',
         success: false,
         ipAddress: getClientIP(c),
-        userAgent: c.req.header('user-agent'),
+        userAgent: c.req.header('user-agent') || '',
         errorMessage: error instanceof Error ? error.message : 'Unknown error',
         metadata: { error: error.stack }
       })
@@ -235,7 +236,7 @@ async function verifyAdminKey(key: string): Promise<{
     }
 
     // 检查使用次数限制
-    if (token.maxUsage && token.usageCount >= token.maxUsage) {
+    if (token.maxUsage && token.usageCount != null && token.usageCount >= token.maxUsage) {
       return {
         isValid: false,
         keyId: token.tokenId,
@@ -251,7 +252,7 @@ async function verifyAdminKey(key: string): Promise<{
       keyId: token.tokenId,
       keyType: token.tokenType,
       permissions,
-      associatedId: token.associatedId,
+      associatedId: token.associatedId || undefined,
       revoked: false
     }
   } catch (error) {
@@ -396,8 +397,7 @@ export async function cleanupExpiredKeys() {
 
     const result = await db.update(schema.securityTokens)
       .set({
-        isActive: false,
-        updatedAt: cutoffTime
+        isActive: false
       })
       .where(and(
         eq(schema.securityTokens.tokenType, 'api_key'),
@@ -429,8 +429,5 @@ function getClientIP(c: Context): string {
          c.req.header('cf-connecting-ip') ||
          'unknown'
 }
-
-// 为了让TypeScript编译器满意，需要导入sql函数
-import { sql } from 'drizzle-orm'
 
 export default adminAuth

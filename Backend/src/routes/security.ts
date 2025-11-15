@@ -2,12 +2,13 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { integratedSecurityService } from '../services/integrated-security-service'
-import { adminAuth } from '../middleware/admin-auth'
+import { adminAuth } from '../middleware/admin-jwt-auth'
 import { rateLimitByIP, adminRateLimit } from '../middleware/rate-limit'
 import { corsSecurity, adminCorsSecurity, securityHeaders } from '../middleware/cors-security'
 import { requestLogging, adminRequestLogging } from '../middleware/request-logging'
+import type { AppContext, AdminUser, AdminAuth } from '../types/admin'
 
-const security = new Hono()
+const security = new Hono<{ Variables: { admin: AdminUser; adminAuth: AdminAuth; sessionId: string } }>()
 
 // 安全中间件栈
 security.use('*', securityHeaders())
@@ -33,13 +34,13 @@ security.get('/health', rateLimitByIP({ maxRequests: 30 }), async (c) => {
 })
 
 // 管理员安全端点
-const adminSecurity = new Hono()
+const adminSecurity = new Hono<{ Variables: { admin: AdminUser; adminAuth: AdminAuth; sessionId: string } }>()
 
 // 管理员中间件
 adminSecurity.use('*', adminCorsSecurity())
 adminSecurity.use('*', adminRequestLogging())
 adminSecurity.use('*', adminRateLimit())
-adminSecurity.use('*', adminAuth({ permissions: ['admin:security'] }))
+adminSecurity.use('*', adminAuth)
 
 // 安全仪表板
 adminSecurity.get('/dashboard', async (c) => {
@@ -109,7 +110,11 @@ adminSecurity.put('/config', zValidator('json', z.object({
   try {
     const { configService } = await import('../services/config-service')
     const { groupKey, configKey, value, ...options } = c.req.valid('json')
-    const adminAuth = c.get('adminAuth')
+    const admin = c.get('admin')
+    const adminAuth: AdminAuth = {
+      associatedId: admin.id.toString(),
+      permissions: admin.role === 'super_admin' ? ['*'] : ['admin:security']
+    }
 
     const success = await configService.setConfig(groupKey, configKey, value, {
       ...options,
@@ -146,14 +151,19 @@ adminSecurity.post('/api-key/generate', zValidator('json', z.object({
   purpose: z.string().optional()
 })), async (c) => {
   try {
-    const { adminAuth, generateApiKey } = await import('../middleware/admin-auth')
+    const { generateApiKey } = await import('../middleware/admin-auth')
     const { permissions, expiresIn, purpose, associatedId } = c.req.valid('json')
+    const admin = c.get('admin')
+    const adminAuth: AdminAuth = {
+      associatedId: admin.id.toString(),
+      permissions: admin.role === 'super_admin' ? ['*'] : ['admin:security']
+    }
 
     const result = await generateApiKey({
       associatedId: associatedId || adminAuth.associatedId,
       permissions,
-      expiresIn,
-      purpose
+      purpose,
+      maxUsage: 1
     })
 
     return c.json({
@@ -177,8 +187,13 @@ adminSecurity.post('/api-key/generate', zValidator('json', z.object({
 // 撤销API密钥
 adminSecurity.delete('/api-key/:keyId', async (c) => {
   try {
-    const { adminAuth, revokeApiKey } = await import('../middleware/admin-auth')
+    const { revokeApiKey } = await import('../middleware/admin-auth')
     const keyId = c.req.param('keyId')
+    const admin = c.get('admin')
+    const adminAuth: AdminAuth = {
+      associatedId: admin.id.toString(),
+      permissions: admin.role === 'super_admin' ? ['*'] : ['admin:security']
+    }
 
     const success = await revokeApiKey(keyId, adminAuth.associatedId)
 

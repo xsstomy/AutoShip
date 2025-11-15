@@ -7,11 +7,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3100',
         changeOrigin: true,
       },
       '/webhooks': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3100',
         changeOrigin: true,
       },
     },

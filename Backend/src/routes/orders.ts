@@ -11,7 +11,8 @@ import {
   ApiResponse,
   PaginatedResponse,
   ORDER_ERROR_CODES,
-  ORDER_STATUS_TRANSITIONS
+  ORDER_STATUS_TRANSITIONS,
+  OrderStatusType
 } from '../types/orders'
 import { withTransaction } from '../db'
 
@@ -309,8 +310,8 @@ app.put('/:id/status', zValidator('json', updateOrderStatusSchema), async (c) =>
     }
 
     // 验证状态转换是否合法
-    const allowedStatuses = ORDER_STATUS_TRANSITIONS[existingOrder.status] || []
-    if (!allowedStatuses.includes(updateData.status)) {
+    const allowedStatuses = ORDER_STATUS_TRANSITIONS[existingOrder.status as OrderStatusType] || []
+    if (!allowedStatuses.includes(updateData.status as OrderStatusType)) {
       return c.json({
         success: false,
         error: {

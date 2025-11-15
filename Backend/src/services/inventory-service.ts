@@ -1,5 +1,5 @@
-import { db, schema, withTransaction, sqlite } from '../db'
-import { eq, and, desc, asc, count, like, isNull, sql, inArray } from 'drizzle-orm'
+import { db, schema, withTransaction } from '../db'
+import { eq, and, desc, asc, count, like, isNull, sql, inArray, or } from 'drizzle-orm'
 import { validateInventoryText, validateInventoryTextUpdate } from '../db/validation'
 import { randomUUID } from 'crypto'
 
@@ -52,7 +52,10 @@ export class InventoryService {
         eq(schema.inventoryText.productId, productId),
         eq(schema.inventoryText.isUsed, false),
         // 检查过期时间
-        isNull(schema.inventoryText.expiresAt) || `${schema.inventoryText.expiresAt} > datetime('now')`
+        or(
+          isNull(schema.inventoryText.expiresAt),
+          sql`${schema.inventoryText.expiresAt} > datetime('now')`
+        )
       ))
       .orderBy(desc(schema.inventoryText.priority), asc(schema.inventoryText.createdAt))
       .limit(limit)
@@ -218,16 +221,27 @@ export class InventoryService {
     }
 
     if (expiredOnly) {
-      whereConditions.push(`${schema.inventoryText.expiresAt} <= datetime('now')`)
+      whereConditions.push(sql`${schema.inventoryText.expiresAt} <= datetime('now')`)
     } else {
       whereConditions.push(
-        isNull(schema.inventoryText.expiresAt) || `${schema.inventoryText.expiresAt} > datetime('now')`
+        isNull(schema.inventoryText.expiresAt)
       )
     }
 
     let queryBuilder = db
       .select({
-        ...schema.inventoryText,
+        id: schema.inventoryText.id,
+        productId: schema.inventoryText.productId,
+        content: schema.inventoryText.content,
+        batchName: schema.inventoryText.batchName,
+        priority: schema.inventoryText.priority,
+        isUsed: schema.inventoryText.isUsed,
+        usedOrderId: schema.inventoryText.usedOrderId,
+        usedAt: schema.inventoryText.usedAt,
+        expiresAt: schema.inventoryText.expiresAt,
+        metadata: schema.inventoryText.metadata,
+        createdAt: schema.inventoryText.createdAt,
+        createdBy: schema.inventoryText.createdBy,
         productName: schema.products.name, // 关联产品名称
       })
       .from(schema.inventoryText)
@@ -250,8 +264,8 @@ export class InventoryService {
       countQuery = countQuery.where(and(...whereConditions))
     }
 
-    const totalCountResult = await countQuery
-    const total = totalCountResult[0].count
+    const totalCountResult = await countQuery.get()
+    const total = totalCountResult?.count || 0
 
     return {
       items,
@@ -341,7 +355,7 @@ export class InventoryService {
     const result = await db.delete(schema.inventoryText)
       .where(and(
         eq(schema.inventoryText.isUsed, false),
-        `${schema.inventoryText.expiresAt} <= datetime('now')`
+        sql`${schema.inventoryText.expiresAt} <= datetime('now')`
       ))
 
     return result.changes
@@ -411,22 +425,33 @@ export class InventoryService {
     ]
 
     if (startDate) {
-      whereConditions.push(`${schema.inventoryText.usedAt} >= '${startDate}'`)
+      whereConditions.push(sql`${schema.inventoryText.usedAt} >= ${startDate}`)
     }
 
     if (endDate) {
-      whereConditions.push(`${schema.inventoryText.usedAt} <= '${endDate}'`)
+      whereConditions.push(sql`${schema.inventoryText.usedAt} <= ${endDate}`)
     }
 
     let queryBuilder = db
       .select({
-        ...schema.inventoryText,
+        id: schema.inventoryText.id,
+        productId: schema.inventoryText.productId,
+        content: schema.inventoryText.content,
+        batchName: schema.inventoryText.batchName,
+        priority: schema.inventoryText.priority,
+        isUsed: schema.inventoryText.isUsed,
+        usedOrderId: schema.inventoryText.usedOrderId,
+        usedAt: schema.inventoryText.usedAt,
+        expiresAt: schema.inventoryText.expiresAt,
+        metadata: schema.inventoryText.metadata,
+        createdAt: schema.inventoryText.createdAt,
+        createdBy: schema.inventoryText.createdBy,
         orderEmail: schema.orders.email, // 关联订单邮箱
       })
       .from(schema.inventoryText)
       .leftJoin(schema.orders, eq(schema.inventoryText.usedOrderId, schema.orders.id))
 
-    if (whereConditions.length > 1) {
+    if (whereConditions.length > 0) {
       queryBuilder = queryBuilder.where(and(...whereConditions))
     }
 
@@ -521,10 +546,10 @@ export class InventoryService {
       .leftJoin(schema.products, eq(schema.inventoryText.productId, schema.products.id))
       .where(and(
         eq(schema.inventoryText.isUsed, false),
-        isNull(schema.inventoryText.expiresAt) || `${schema.inventoryText.expiresAt} > datetime('now')`
+        sql`${schema.inventoryText.expiresAt} IS NULL OR ${schema.inventoryText.expiresAt} > datetime('now')`
       ))
       .groupBy(schema.inventoryText.productId)
-      .having(count(schema.inventoryText.id) < threshold)
+      .having(sql`count(*) < ${threshold}`)
 
     return result
   }

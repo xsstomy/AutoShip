@@ -1,16 +1,12 @@
 import axios, { AxiosError } from 'axios'
-
-/**
- * API 基础配置
- */
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+import { ADMIN_API_URL, API_TIMEOUT } from '../config/api'
 
 /**
  * 创建 Axios 实例
  */
 const apiClient = axios.create({
-  baseURL: `${API_BASE_URL}/api/v1/admin`,
-  timeout: 30000,
+  baseURL: ADMIN_API_URL,
+  timeout: API_TIMEOUT.LONG,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',

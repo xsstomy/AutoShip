@@ -1,5 +1,5 @@
 import { db, schema, withTransaction } from '../db'
-import { eq, and, desc, asc } from 'drizzle-orm'
+import { eq, and, desc, asc, sql, inArray } from 'drizzle-orm'
 import { OrderStatus, DeliveryType } from '../db/schema'
 import { orderService } from './order-service'
 import { inventoryService } from './inventory-service'
@@ -11,7 +11,7 @@ export class TransactionService {
    * 创建订单并分配库存
    */
   async createOrderWithInventory(orderData: any) {
-    return await withTransaction(async () => {
+    return await withTransaction(async (tx) => {
       // 1. 创建订单
       const order = await orderService.createOrder(orderData)
 
@@ -83,7 +83,7 @@ export class TransactionService {
    * 处理支付成功 - 更新订单状态并创建发货记录
    */
   async processPaymentSuccess(orderId: string, gatewayData?: any) {
-    return await withTransaction(async () => {
+    return await withTransaction(async (tx) => {
       // 1. 获取订单信息
       const order = await orderService.getOrderById(orderId)
       if (!order) {
@@ -186,7 +186,7 @@ export class TransactionService {
    * 处理退款 - 更新订单状态并失效发货记录
    */
   async processRefund(orderId: string, reason?: string) {
-    return await withTransaction(async () => {
+    return await withTransaction(async (tx) => {
       // 1. 获取订单信息
       const order = await orderService.getOrderById(orderId)
       if (!order) {
@@ -227,7 +227,7 @@ export class TransactionService {
    * 重新发送发货邮件
    */
   async resendDelivery(orderId: string) {
-    return await withTransaction(async () => {
+    return await withTransaction(async (tx) => {
       // 1. 获取订单和发货信息
       const orderDetails = await orderService.getOrderWithDetails(orderId)
       if (!orderDetails) {
@@ -286,7 +286,7 @@ export class TransactionService {
    * 批量更新库存优先级
    */
   async batchUpdateInventoryPriority(updates: Array<{ id: number; priority: number }>) {
-    return await withTransaction(async () => {
+    return await withTransaction(async (tx) => {
       const results = []
 
       for (const { id, priority } of updates) {
@@ -306,16 +306,15 @@ export class TransactionService {
    * 批量删除过期库存
    */
   async batchDeleteExpiredInventory(productIds: number[] | null = null) {
-    return await withTransaction(async () => {
+    return await withTransaction(async (tx) => {
       let whereConditions = [
         eq(schema.inventoryText.isUsed, false),
-        `${schema.inventoryText.expiresAt} <= datetime('now')`
+        sql`${schema.inventoryText.expiresAt} <= datetime('now')`
       ]
 
       if (productIds && productIds.length > 0) {
         // 构建IN条件
-        const productIdList = productIds.join(',')
-        whereConditions.push(`schema.inventory_text.productId IN (${productIdList})`)
+        whereConditions.push(inArray(schema.inventoryText.productId, productIds))
       }
 
       const result = await db.delete(schema.inventoryText)
@@ -329,7 +328,7 @@ export class TransactionService {
    * 批量更新产品价格
    */
   async batchUpdateProductPrices(updates: Array<{ productId: number; currency: string; price: number }>) {
-    return await withTransaction(async () => {
+    return await withTransaction(async (tx) => {
       const results = []
 
       for (const { productId, currency, price } of updates) {

@@ -1,17 +1,16 @@
 import type { OrderDetail, ApiResponse } from '../types/order';
+import { API_FULL_URL } from '../config/api';
 
 /**
  * 订单API服务
  */
 export class OrderApiService {
-  private static readonly BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
-
   /**
    * 获取订单详情
    */
   static async getOrderDetail(orderId: string): Promise<OrderDetail> {
     try {
-      const response = await fetch(`${this.BASE_URL}/api/v1/orders/${orderId}`);
+      const response = await fetch(`${API_FULL_URL}/orders/${orderId}`);
 
       if (!response.ok) {
         if (response.status === 404) {

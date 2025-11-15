@@ -4,6 +4,7 @@
 
 import type { OrderInfo, PaymentInitRequest, PaymentInitResponse, PaymentStatusResponse } from '../types/payment';
 import type { Currency } from '../types/product';
+import { API_FULL_URL } from '../config/api';
 
 /**
  * 支付网关信息（与后端 GatewayInfo 对应）
@@ -18,11 +19,6 @@ export interface PaymentGatewayInfo {
 }
 
 /**
- * API 基础 URL
- */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
-
-/**
  * 通用 API 请求处理
  */
 async function apiRequest<T>(
@@ -30,7 +26,7 @@ async function apiRequest<T>(
   options: RequestInit = {}
 ): Promise<T> {
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(`${API_FULL_URL}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,

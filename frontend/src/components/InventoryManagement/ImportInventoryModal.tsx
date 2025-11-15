@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { importInventory, type ImportResult } from '../../services/inventoryApi'
+import { ADMIN_API_URL } from '../../config/api'
 
 interface ImportInventoryModalProps {
   isOpen: boolean
@@ -37,7 +38,7 @@ export default function ImportInventoryModal({ isOpen, onClose, onSuccess }: Imp
     try {
       // 这里应该从商品管理 API 获取商品列表
       // 为了简化演示，我们使用模拟数据
-      const response = await fetch('http://localhost:3000/api/v1/admin/products?page=1&limit=100', {
+      const response = await fetch(`${ADMIN_API_URL}/products?page=1&limit=100`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('admin_token')}`,
         },

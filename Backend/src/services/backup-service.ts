@@ -1,8 +1,8 @@
 import fs from 'fs/promises'
 import path from 'path'
 import crypto from 'crypto'
-import { db } from '../db'
-import { schema, securityService } from './security-service'
+import { db, schema } from '../db'
+import { securityService } from './security-service'
 
 // 备份服务类
 export class BackupService {
@@ -84,7 +84,7 @@ export class BackupService {
           console.error(`Failed to export table ${tableName}:`, error)
           backupData.tables[tableName] = {
             records: [],
-            error: error.message,
+            error: error instanceof Error ? error.message : String(error),
           }
         }
       }
@@ -129,7 +129,7 @@ export class BackupService {
       return {
         success: false,
         backupId,
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       }
     }
   }
@@ -149,7 +149,7 @@ export class BackupService {
         exportedAt: new Date().toISOString(),
       }
     } catch (error) {
-      throw new Error(`Failed to export table ${tableName}: ${error.message}`)
+      throw new Error(`Failed to export table ${tableName}: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -159,7 +159,7 @@ export class BackupService {
   private encryptData(data: Buffer): any {
     const key = this.getBackupEncryptionKey()
     const iv = crypto.randomBytes(16)
-    const cipher = crypto.createCipher(this.ENCRYPTION_ALGORITHM, key)
+    const cipher = crypto.createCipheriv(this.ENCRYPTION_ALGORITHM, Buffer.from(key, 'hex'), iv)
 
     let encrypted = cipher.update(data)
     encrypted = Buffer.concat([encrypted, cipher.final()])
@@ -178,7 +178,8 @@ export class BackupService {
    */
   private decryptData(encryptedData: any): Buffer {
     const key = this.getBackupEncryptionKey()
-    const decipher = crypto.createDecipher(this.ENCRYPTION_ALGORITHM, key)
+    const iv = Buffer.from(encryptedData.iv, 'base64')
+    const decipher = crypto.createDecipheriv(this.ENCRYPTION_ALGORITHM, Buffer.from(key, 'hex'), iv)
 
     decipher.setAuthTag(Buffer.from(encryptedData.tag, 'base64'))
 
@@ -265,7 +266,7 @@ export class BackupService {
           restoredTables.push(tableName)
           console.log(`Restored table: ${tableName}`)
         } catch (error) {
-          errors.push(`Failed to restore table ${tableName}: ${error.message}`)
+          errors.push(`Failed to restore table ${tableName}: ${error instanceof Error ? error.message : String(error)}`)
         }
       }
 
@@ -282,7 +283,7 @@ export class BackupService {
       return {
         success: false,
         restoredTables,
-        errors: [error.message],
+        errors: [error instanceof Error ? error.message : String(error)],
       }
     }
   }
@@ -334,7 +335,7 @@ export class BackupService {
       console.log(`Inserted ${records.length} records into ${tableName}`)
 
     } catch (error) {
-      throw new Error(`Failed to restore table ${tableName}: ${error.message}`)
+      throw new Error(`Failed to restore table ${tableName}: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -514,7 +515,7 @@ export class BackupService {
       }
 
     } catch (error) {
-      errors.push(`Failed to validate backup: ${error.message}`)
+      errors.push(`Failed to validate backup: ${error instanceof Error ? error.message : String(error)}`)
       return { valid: false, errors }
     }
   }

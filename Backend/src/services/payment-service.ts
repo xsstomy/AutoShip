@@ -351,7 +351,10 @@ export class PaymentService {
       .where(eq(schema.orders.id, orderId))
       .limit(1)
 
-    return result[0] || null
+    return result[0] ? {
+      ...result[0],
+      gateway: result[0].gateway as GatewayType
+    } : null
   }
 
   /**

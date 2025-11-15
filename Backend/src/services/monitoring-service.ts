@@ -1,5 +1,5 @@
 import { db, schema } from '../db'
-import { eq, and, desc, asc, count, like } from 'drizzle-orm'
+import { eq, and, desc, asc, count, like, sql } from 'drizzle-orm'
 
 // 监控服务类
 export class MonitoringService {
@@ -350,7 +350,7 @@ export class MonitoringService {
         .from(schema.adminLogs)
         .where(and(
           eq(schema.adminLogs.success, false),
-          `${schema.adminLogs.createdAt} > datetime('now', '-1 hour')`
+          sql`${schema.adminLogs.createdAt} > datetime('now', '-1 hour')`
         ))
         .orderBy(desc(schema.adminLogs.createdAt))
         .limit(10)

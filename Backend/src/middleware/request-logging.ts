@@ -71,7 +71,7 @@ export function requestLogging(options: RequestLoggingOptions = {}) {
 
       // 记录响应体（如果需要）
       if (includeResponseBody) {
-        const response = c.res
+        const response = c.res as any
         if (response.body && typeof response.body === 'string') {
           responseBody = response.body.length > maxBodySize
             ? response.body.substring(0, maxBodySize) + '...[truncated]'

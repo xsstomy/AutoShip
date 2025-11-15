@@ -251,13 +251,22 @@ export class OrderStateService {
         .orderBy(desc(schema.auditLogs.createdAt))
         .limit(50)
 
-      return historyRecords.map(record => ({
-        orderId,
-        status: record.metadata?.status || 'unknown',
-        timestamp: record.createdAt,
-        reason: record.action,
-        triggeredBy: record.metadata?.triggeredBy || 'system'
-      }))
+      return historyRecords.map(record => {
+        let metadata = {}
+        try {
+          metadata = record.metadata ? JSON.parse(record.metadata) : {}
+        } catch (e) {
+          // 忽略 JSON 解析错误
+        }
+
+        return {
+          orderId,
+          status: (metadata as any).status || 'unknown',
+          timestamp: record.createdAt || '',
+          reason: record.action,
+          triggeredBy: (metadata as any).triggeredBy || 'system'
+        }
+      })
 
     } catch (error) {
       console.error(`[OrderState] Failed to get status history for order ${orderId}:`, error)
@@ -327,7 +336,7 @@ export class OrderStateService {
 
       return {
         orders,
-        total: countResult[0].count
+        total: Number(countResult[0]?.count || 0)
       }
 
     } catch (error) {
@@ -350,7 +359,7 @@ export class OrderStateService {
         .from(schema.orders)
         .where(sql`${schema.orders.createdAt} >= ${startDate}`)
 
-      const totalOrders = totalResult[0].count
+      const totalOrders = Number(totalResult[0]?.count || 0)
 
       // 状态分布
       const statusResult = await db.select({
@@ -362,9 +371,9 @@ export class OrderStateService {
         .groupBy(schema.orders.status)
 
       const statusDistribution = statusResult.map(s => ({
-        status: s.status,
-        count: s.count,
-        percentage: totalOrders > 0 ? (s.count / totalOrders * 100) : 0
+        status: s.status as OrderStatusType,
+        count: Number(s.count || 0),
+        percentage: totalOrders > 0 ? (Number(s.count || 0) / totalOrders * 100) : 0
       }))
 
       // 网关分布
@@ -378,8 +387,8 @@ export class OrderStateService {
         .groupBy(schema.orders.gateway)
 
       const gatewayDistribution = gatewayResult.map(g => ({
-        gateway: g.gateway,
-        count: g.count,
+        gateway: g.gateway as GatewayType,
+        count: Number(g.count || 0),
         totalAmount: Number(g.totalAmount) || 0
       }))
 
@@ -396,9 +405,9 @@ export class OrderStateService {
         .orderBy(sql`DATE(${schema.orders.createdAt})`)
 
       const dailyStats = dailyResult.map(d => ({
-        date: d.date,
-        orderCount: d.orderCount,
-        paidCount: d.paidCount,
+        date: String(d.date),
+        orderCount: Number(d.orderCount || 0),
+        paidCount: Number(d.paidCount || 0),
         revenue: Number(d.revenue) || 0
       }))
 
@@ -442,8 +451,8 @@ export class OrderStateService {
         .from(schema.orders)
         .where(sql`${schema.orders.createdAt} >= ${startDate}`)
 
-      const overall = totalResult[0].total > 0 ?
-        (totalResult[0].paid / totalResult[0].total * 100) : 0
+      const overall = Number(totalResult[0]?.total || 0) > 0 ?
+        (Number(totalResult[0]?.paid || 0) / Number(totalResult[0]?.total || 0) * 100) : 0
 
       // 按网关统计
       const gatewayResult = await db.select({
@@ -457,7 +466,9 @@ export class OrderStateService {
 
       const byGateway: Record<string, number> = {}
       gatewayResult.forEach(g => {
-        byGateway[g.gateway] = g.total > 0 ? (g.paid / g.total * 100) : 0
+        const total = Number(g.total || 0)
+        const paid = Number(g.paid || 0)
+        byGateway[String(g.gateway)] = total > 0 ? (paid / total * 100) : 0
       })
 
       // 每日统计
@@ -472,8 +483,8 @@ export class OrderStateService {
         .orderBy(sql`DATE(${schema.orders.createdAt})`)
 
       const daily = dailyResult.map(d => ({
-        date: d.date,
-        rate: d.total > 0 ? (d.paid / d.total * 100) : 0
+        date: String(d.date),
+        rate: Number(d.total || 0) > 0 ? (Number(d.paid || 0) / Number(d.total || 0) * 100) : 0
       }))
 
       return {

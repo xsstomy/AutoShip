@@ -5,11 +5,7 @@ import type {
   ApiResponse
 } from '../types/order';
 import type { Currency } from '../types/product';
-
-/**
- * API 基础 URL
- */
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { API_FULL_URL } from '../config/api';
 
 /**
  * 创建订单
@@ -20,7 +16,7 @@ export const createOrder = async (
   orderData: OrderCreateRequest
 ): Promise<OrderCreateResponse> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v1/checkout/create`, {
+    const response = await fetch(`${API_FULL_URL}/checkout/create`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -62,7 +58,7 @@ export const createOrder = async (
  */
 export const getOrderById = async (orderId: string): Promise<Order> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v1/orders/${orderId}`);
+    const response = await fetch(`${API_FULL_URL}/orders/${orderId}`);
 
     const data: ApiResponse<Order> = await response.json();
 
@@ -90,7 +86,7 @@ export const validateProductForPurchase = async (
   productId: string
 ): Promise<{ valid: boolean; product?: any; error?: string }> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v1/products/${productId}/validate`);
+    const response = await fetch(`${API_FULL_URL}/products/${productId}/validate`);
 
     const data: ApiResponse<{ valid: boolean; product?: any }> = await response.json();
 

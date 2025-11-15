@@ -1,5 +1,5 @@
 import { db, schema } from '../db'
-import { eq, and, desc, asc } from 'drizzle-orm'
+import { eq, and, desc, asc, sql, gte, lte, lt, count } from 'drizzle-orm'
 import { securityService } from './security-service'
 
 // 审计服务类
@@ -208,20 +208,17 @@ export class AuditService {
     }
 
     if (startDate) {
-      whereConditions.push(`${schema.adminLogs.createdAt} >= '${startDate}'`)
+      whereConditions.push(gte(schema.adminLogs.createdAt, startDate))
     }
 
     if (endDate) {
-      whereConditions.push(`${schema.adminLogs.createdAt} <= '${endDate}'`)
+      whereConditions.push(lte(schema.adminLogs.createdAt, endDate))
     }
 
-    let queryBuilder = db.select().from(schema.adminLogs)
-
-    if (whereConditions.length > 0) {
-      queryBuilder = queryBuilder.where(and(...whereConditions))
-    }
-
-    const logs = await queryBuilder
+    const baseQuery = db.select().from(schema.adminLogs)
+    const logs = await (whereConditions.length > 0
+      ? baseQuery.where(and(...whereConditions))
+      : baseQuery)
       .orderBy(desc(schema.adminLogs.createdAt))
       .limit(limit)
       .offset(offset)
@@ -235,12 +232,10 @@ export class AuditService {
     }))
 
     // 获取总数
-    let countQuery = db.select({ count: require('drizzle-orm').count(schema.adminLogs.id) }).from(schema.adminLogs)
-    if (whereConditions.length > 0) {
-      countQuery = countQuery.where(and(...whereConditions))
-    }
-
-    const totalCountResult = await countQuery
+    const baseCountQuery = db.select({ count: count(schema.adminLogs.id) }).from(schema.adminLogs)
+    const totalCountResult = await (whereConditions.length > 0
+      ? baseCountQuery.where(and(...whereConditions))
+      : baseCountQuery)
     const total = totalCountResult[0].count
 
     return {
@@ -266,7 +261,7 @@ export class AuditService {
       .from(schema.adminLogs)
       .where(and(
         eq(schema.adminLogs.adminEmail, userEmail),
-        `${schema.adminLogs.createdAt} >= '${startDate}'`
+        gte(schema.adminLogs.createdAt, startDate)
       ))
       .orderBy(desc(schema.adminLogs.createdAt))
 
@@ -326,8 +321,8 @@ export class AuditService {
       })
         .from(schema.adminLogs)
         .where(and(
-          `${schema.adminLogs.createdAt} >= '${startDate}'`,
-          `${schema.adminLogs.createdAt} <= '${endDate}'`
+          gte(schema.adminLogs.createdAt, startDate),
+          lte(schema.adminLogs.createdAt, endDate)
         ))
 
       const successResult = await db.select({
@@ -336,8 +331,8 @@ export class AuditService {
         .from(schema.adminLogs)
         .where(and(
           eq(schema.adminLogs.success, true),
-          `${schema.adminLogs.createdAt} >= '${startDate}'`,
-          `${schema.adminLogs.createdAt} <= '${endDate}'`
+          gte(schema.adminLogs.createdAt, startDate),
+          lte(schema.adminLogs.createdAt, endDate)
         ))
 
       const failedResult = await db.select({
@@ -346,8 +341,8 @@ export class AuditService {
         .from(schema.adminLogs)
         .where(and(
           eq(schema.adminLogs.success, false),
-          `${schema.adminLogs.createdAt} >= '${startDate}'`,
-          `${schema.adminLogs.createdAt} <= '${endDate}'`
+          gte(schema.adminLogs.createdAt, startDate),
+          lte(schema.adminLogs.createdAt, endDate)
         ))
 
       const stats = {
@@ -383,8 +378,8 @@ export class AuditService {
       })
         .from(schema.adminLogs)
         .where(and(
-          `${schema.adminLogs.createdAt} >= '${startDate}'`,
-          `${schema.adminLogs.createdAt} <= '${endDate}'`
+          gte(schema.adminLogs.createdAt, startDate),
+          lte(schema.adminLogs.createdAt, endDate)
         ))
         .groupBy(groupField)
         .orderBy(require('drizzle-orm').desc(require('drizzle-orm').count(schema.adminLogs.id)))
@@ -402,8 +397,8 @@ export class AuditService {
         const details = await db.select()
           .from(schema.adminLogs)
           .where(and(
-            `${schema.adminLogs.createdAt} >= '${startDate}'`,
-            `${schema.adminLogs.createdAt} <= '${endDate}'`
+            gte(schema.adminLogs.createdAt, startDate),
+            lte(schema.adminLogs.createdAt, endDate)
           ))
           .orderBy(desc(schema.adminLogs.createdAt))
           .limit(1000) // 限制详细记录数量
@@ -435,8 +430,8 @@ export class AuditService {
     const result = await db.delete(schema.adminLogs)
       .where(and(
         eq(schema.adminLogs.success, true), // 只删除成功的日志
-        `${schema.adminLogs.createdAt} < '${cutoffDate}'`,
-        `${schema.adminLogs.action} != 'CRITICAL_EVENT'` // 保留关键事件
+        lt(schema.adminLogs.createdAt, cutoffDate),
+        sql`${schema.adminLogs.action} != 'CRITICAL_EVENT'` // 保留关键事件
       ))
 
     return result.changes
@@ -449,8 +444,8 @@ export class AuditService {
     const logs = await db.select()
       .from(schema.adminLogs)
       .where(and(
-        `${schema.adminLogs.createdAt} >= '${startDate}'`,
-        `${schema.adminLogs.createdAt} <= '${endDate}'`
+        gte(schema.adminLogs.createdAt, startDate),
+        lte(schema.adminLogs.createdAt, endDate)
       ))
       .orderBy(desc(schema.adminLogs.createdAt))
 

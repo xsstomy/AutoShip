@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { webhookProcessingService } from '../services/webhook-processing-service'
-import { Gateway } from '../types/orders'
+import { Gateway, type GatewayType } from '../types/orders'
 import {
   webhookSignatureValidator,
   webhookCorsSecurity,
@@ -49,7 +49,13 @@ app.post('/alipay', async (c) => {
       const clientIP = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown'
       const result = await webhookProcessingService.processAlipayWebhook(
         payload,
-        Object.fromEntries(c.req.headers()),
+        (() => {
+        const headers: Record<string, string> = {}
+        for (const [key, value] of c.req.raw.headers.entries()) {
+          headers[key] = value
+        }
+        return headers
+      })(),
         clientIP
       )
 
@@ -77,7 +83,13 @@ app.post('/alipay', async (c) => {
       const clientIP = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown'
       const result = await webhookProcessingService.processAlipayWebhook(
         payload,
-        Object.fromEntries(c.req.headers()),
+        (() => {
+        const headers: Record<string, string> = {}
+        for (const [key, value] of c.req.raw.headers.entries()) {
+          headers[key] = value
+        }
+        return headers
+      })(),
         clientIP
       )
 
@@ -123,7 +135,13 @@ app.post('/creem', async (c) => {
     const clientIP = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown'
     const result = await webhookProcessingService.processCreemWebhook(
       payload,
-      Object.fromEntries(c.req.headers()),
+      (() => {
+        const headers: Record<string, string> = {}
+        for (const [key, value] of c.req.raw.headers.entries()) {
+          headers[key] = value
+        }
+        return headers
+      })(),
       clientIP
     )
 
@@ -200,7 +218,7 @@ app.post('/test/:gateway', async (c) => {
   }
 
   try {
-    const gateway = c.req.param('gateway') as Gateway
+    const gateway = c.req.param('gateway') as GatewayType
 
     // 验证网关类型
     if (!['alipay', 'creem'].includes(gateway)) {

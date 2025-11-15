@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import { db, schema } from '../db'
-import { eq, and, lt, gt } from 'drizzle-orm'
+import { eq, and, lt, gt, sql } from 'drizzle-orm'
 import { auditService } from './audit-service'
 import { securityService } from './security-service'
 
@@ -110,14 +110,13 @@ export class TokenService {
         tokenId,
         tokenType: 'download',
         tokenHash: this.hashToken(token),
-        associatedId: orderId,
         associatedType: 'order',
         purpose: 'download_access',
         permissions: JSON.stringify(['download:access']),
         metadata: JSON.stringify({
+          associatedId: orderId,
           deliveryId,
-          downloadLimit,
-          orderId
+          downloadLimit
         }),
         isActive: true,
         expiresAt: expiresAt.toISOString(),
@@ -132,11 +131,11 @@ export class TokenService {
         action: 'download_token_generated',
         resourceType: 'security_token',
         resourceId: tokenId,
-        associatedId: orderId,
         success: true,
         ipAddress,
         userAgent,
         metadata: {
+          associatedId: orderId,
           deliveryId,
           downloadLimit,
           expiresAt: expiresAt.toISOString()
@@ -213,7 +212,7 @@ export class TokenService {
       }
 
       // 检查使用次数限制
-      if (tokenData.maxUsage && tokenData.usageCount >= tokenData.maxUsage) {
+      if (tokenData.maxUsage && (tokenData.usageCount || 0) >= tokenData.maxUsage) {
         return { isValid: false, error: 'Download limit exceeded' }
       }
 
@@ -229,7 +228,7 @@ export class TokenService {
       const deliveryId = decoded.data?.deliveryId
       const orderId = decoded.sub
       const remainingDownloads = tokenData.maxUsage ?
-        Math.max(0, tokenData.maxUsage - (tokenData.usageCount + 1)) :
+        Math.max(0, tokenData.maxUsage - ((tokenData.usageCount || 0) + 1)) :
         undefined
 
       // 记录成功验证
@@ -237,11 +236,11 @@ export class TokenService {
         action: 'download_token_verified',
         resourceType: 'security_token',
         resourceId: decoded.jti,
-        associatedId: orderId,
         success: true,
         ipAddress: clientIP,
         userAgent,
         metadata: {
+          associatedId: orderId,
           deliveryId,
           remainingDownloads
         }
@@ -314,11 +313,13 @@ export class TokenService {
         tokenId,
         tokenType: 'admin',
         tokenHash: this.hashToken(token),
-        associatedId,
         associatedType,
         purpose,
         permissions: JSON.stringify(permissions),
-        metadata: JSON.stringify(metadata || {}),
+        metadata: JSON.stringify({
+          associatedId,
+          ...(metadata || {})
+        }),
         isActive: true,
         expiresAt: expiresAt.toISOString(),
         ipAddress,
@@ -331,11 +332,11 @@ export class TokenService {
         action: 'admin_token_generated',
         resourceType: 'security_token',
         resourceId: tokenId,
-        associatedId,
         success: true,
         ipAddress,
         userAgent,
         metadata: {
+          associatedId,
           permissions,
           purpose,
           expiresAt: expiresAt.toISOString()
@@ -425,11 +426,11 @@ export class TokenService {
         action: 'admin_token_verified',
         resourceType: 'security_token',
         resourceId: decoded.jti,
-        associatedId: decoded.sub,
         success: true,
         ipAddress: clientIP,
         userAgent,
         metadata: {
+          associatedId: decoded.sub,
           permissions
         }
       })
@@ -456,7 +457,7 @@ export class TokenService {
           isActive: false,
           revokedAt: new Date().toISOString(),
           revokedBy,
-          updatedAt: new Date().toISOString()
+          // updatedAt field not available in schema
         })
         .where(eq(schema.securityTokens.tokenId, tokenId))
 
@@ -491,7 +492,7 @@ export class TokenService {
           usageCount: sql`${schema.securityTokens.usageCount} + 1`,
           ipAddress: ipAddress || schema.securityTokens.ipAddress,
           userAgent: userAgent || schema.securityTokens.userAgent,
-          updatedAt: new Date().toISOString()
+          // updatedAt field not available in schema
         })
         .where(eq(schema.securityTokens.tokenId, tokenId))
     } catch (error) {
@@ -510,7 +511,7 @@ export class TokenService {
       const result = await db.update(schema.securityTokens)
         .set({
           isActive: false,
-          updatedAt: now
+          revokedAt: now
         })
         .where(and(
           eq(schema.securityTokens.isActive, true),
@@ -575,18 +576,18 @@ export class TokenService {
       const byPurpose: Record<string, number> = {}
 
       typeStats.forEach(stat => {
-        byType[stat.type || 'unknown'] = stat.count
+        byType[stat.type || 'unknown'] = Number(stat.count)
       })
 
       purposeStats.forEach(stat => {
-        byPurpose[stat.purpose || 'unknown'] = stat.count
+        byPurpose[stat.purpose || 'unknown'] = Number(stat.count)
       })
 
       return {
-        totalTokens: total,
-        activeTokens: active,
-        expiredTokens: expired,
-        revokedTokens: revoked,
+        totalTokens: Number(total),
+        activeTokens: Number(active),
+        expiredTokens: Number(expired),
+        revokedTokens: Number(revoked),
         byType,
         byPurpose
       }
@@ -667,9 +668,9 @@ export class TokenService {
       if (oldToken.tokenType === 'admin') {
         const permissions = oldToken.permissions ? JSON.parse(oldToken.permissions) : []
         const result = await this.generateAdminToken({
-          associatedId: oldToken.associatedId,
-          associatedType: oldToken.associatedType,
-          purpose: oldToken.purpose,
+          associatedId: oldToken.associatedId || undefined,
+          associatedType: oldToken.associatedType || undefined,
+          purpose: oldToken.purpose || undefined,
           permissions,
           expiresIn: newExpiresIn
         })

@@ -180,10 +180,7 @@ export const fileSchema = z.object({
   createdBy: z.string().optional(),
 })
 
-export const fileUpdateSchema = fileSchema.partial().omit({
-  id: true,
-  createdAt: true,
-})
+export const fileUpdateSchema = fileSchema.partial()
 
 // 查询参数验证模式
 export const paginationSchema = z.object({
@@ -241,6 +238,7 @@ export const validateDelivery = (data: unknown) => deliverySchema.parse(data)
 export const validateDownload = (data: unknown) => downloadSchema.parse(data)
 export const validatePaymentRaw = (data: unknown) => paymentRawSchema.parse(data)
 export const validateInventoryText = (data: unknown) => inventoryTextSchema.parse(data)
+export const validateInventoryTextUpdate = (data: unknown) => inventoryTextUpdateSchema.parse(data)
 export const validateSetting = (data: unknown) => settingSchema.parse(data)
 export const validateAdminLog = (data: unknown) => adminLogSchema.parse(data)
 export const validateFile = (data: unknown) => fileSchema.parse(data)

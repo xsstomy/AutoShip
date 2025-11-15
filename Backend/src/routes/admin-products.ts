@@ -7,8 +7,9 @@ import { getClientIP, sanitizeForLog } from '../utils/auth'
 import { AdminEventType, AdminEventCategory } from '../db/schema'
 import { validateProduct, validateProductPrice } from '../db/validation'
 import { successResponse, errors } from '../utils/response'
+import type { AppContext, AdminUser } from '../types/admin'
 
-const app = new Hono()
+const app = new Hono<{ Variables: { admin: AdminUser; sessionId: string } }>()
 
 // 价格更新验证模式
 const updatePriceSchema = z.object({
@@ -106,7 +107,7 @@ app.post('/products', adminAuth, async (c) => {
       return c.json({
         success: false,
         error: '输入数据无效',
-        details: error.errors,
+        details: error.issues,
       }, 400)
     }
 
@@ -288,7 +289,7 @@ app.put('/products/:id/prices', adminAuth, async (c) => {
       return c.json({
         success: false,
         error: '输入数据无效',
-        details: error.errors,
+        details: error.issues,
       }, 400)
     }
 
@@ -436,7 +437,7 @@ app.patch('/products/:id/status', adminAuth, async (c) => {
       return c.json({
         success: false,
         error: '输入数据无效',
-        details: error.errors,
+        details: error.issues,
       }, 400)
     }
 
@@ -535,7 +536,7 @@ app.post('/products/batch-status', adminAuth, async (c) => {
       return c.json({
         success: false,
         error: '输入数据无效',
-        details: error.errors,
+        details: error.issues,
       }, 400)
     }
 

@@ -22,7 +22,9 @@ export class SecurityService {
   encrypt(plaintext: string): { encrypted: string; iv: string; tag: string } {
     try {
       const iv = crypto.randomBytes(16)
-      const cipher = crypto.createCipher(this.ENCRYPTION_ALGORITHM, this.ENCRYPTION_KEY)
+      // 确保密钥长度正确（32字节用于 aes-256）
+      const key = Buffer.from(this.ENCRYPTION_KEY.slice(0, 64), 'hex')
+      const cipher = crypto.createCipheriv(this.ENCRYPTION_ALGORITHM, key, iv)
       cipher.setAAD(Buffer.from('autoship')) // 附加认证数据
 
       let encrypted = cipher.update(plaintext, 'utf8', 'hex')
@@ -35,7 +37,7 @@ export class SecurityService {
         iv: iv.toString('hex'),
         tag: tag.toString('hex')
       }
-    } catch (error) {
+    } catch (error: any) {
       throw new Error(`Encryption failed: ${error.message}`)
     }
   }
@@ -45,7 +47,9 @@ export class SecurityService {
    */
   decrypt(encrypted: string, iv: string, tag: string): string {
     try {
-      const decipher = crypto.createDecipher(this.ENCRYPTION_ALGORITHM, this.ENCRYPTION_KEY)
+      // 确保密钥长度正确（32字节用于 aes-256）
+      const key = Buffer.from(this.ENCRYPTION_KEY.slice(0, 64), 'hex')
+      const decipher = crypto.createDecipheriv(this.ENCRYPTION_ALGORITHM, key, Buffer.from(iv, 'hex'))
       decipher.setAAD(Buffer.from('autoship'))
       decipher.setAuthTag(Buffer.from(tag, 'hex'))
 
@@ -53,7 +57,7 @@ export class SecurityService {
       decrypted += decipher.final('utf8')
 
       return decrypted
-    } catch (error) {
+    } catch (error: any) {
       throw new Error(`Decryption failed: ${error.message}`)
     }
   }
@@ -245,7 +249,7 @@ export class SecurityService {
   /**
    * 邮箱脱敏
    */
-  private maskEmail(email: string): string {
+  public maskEmail(email: string): string {
     const [username, domain] = email.split('@')
     if (username.length <= 2) {
       return `${username[0]}*@${domain}`
@@ -256,7 +260,7 @@ export class SecurityService {
   /**
    * IP地址脱敏
    */
-  private maskIpAddress(ip: string): string {
+  public maskIpAddress(ip: string): string {
     const parts = ip.split('.')
     if (parts.length === 4) {
       return `${parts[0]}.${parts[1]}.*.*`
@@ -267,7 +271,7 @@ export class SecurityService {
   /**
    * User-Agent脱敏
    */
-  private maskUserAgent(userAgent: string): string {
+  public maskUserAgent(userAgent: string): string {
     if (userAgent.length <= 10) {
       return userAgent.substring(0, 3) + '***'
     }
@@ -277,7 +281,7 @@ export class SecurityService {
   /**
    * 通用脱敏
    */
-  private maskGeneric(value: string): string {
+  public maskGeneric(value: string): string {
     if (value.length <= 4) {
       return '*'.repeat(value.length)
     }
@@ -365,7 +369,7 @@ export class SecurityService {
 
       // 生成整体校验和
       const dataString = JSON.stringify(digest.tables)
-      digest.checksums.overall = this.generateHMAC(dataString, this.ENCRYPTION_KEY)
+      ;(digest.checksums as any).overall = this.generateHMAC(dataString, this.ENCRYPTION_KEY)
 
       return digest
     } catch (error) {

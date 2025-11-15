@@ -1,18 +1,13 @@
 import axios, { AxiosError } from 'axios';
 import type { ProductListResponse, ProductDetailResponse, ApiErrorResponse } from '../types/product';
-
-/**
- * API 基础配置
- * 默认使用环境变量 VITE_API_URL 或回退到 localhost:3000
- */
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { API_FULL_URL, API_TIMEOUT } from '../config/api';
 
 /**
  * 创建 Axios 实例
  */
 const apiClient = axios.create({
-  baseURL: `${API_BASE_URL}/api/v1`,
-  timeout: 10000,
+  baseURL: API_FULL_URL,
+  timeout: API_TIMEOUT.DEFAULT,
   headers: {
     'Content-Type': 'application/json',
   },

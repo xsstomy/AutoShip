@@ -6,8 +6,9 @@ import { adminAuth } from '../middleware/admin-jwt-auth'
 import { getClientIP, sanitizeForLog } from '../utils/auth'
 import { successResponse, errors } from '../utils/response'
 import { AdminEventType, AdminEventCategory } from '../db/schema'
+import type { AppContext, AdminUser } from '../types/admin'
 
-const app = new Hono()
+const app = new Hono<{ Variables: { admin: AdminUser; sessionId: string } }>()
 
 // 库存导入验证模式
 const importInventorySchema = z.object({
@@ -247,7 +248,7 @@ app.post('/inventory/import', adminAuth, async (c) => {
     console.error('导入库存失败:', error)
 
     if (error instanceof z.ZodError) {
-      return errors.VALIDATION_ERROR(c, '参数验证失败', error.errors)
+      return errors.VALIDATION_ERROR(c, '参数验证失败', error.issues)
     }
 
     return errors.INTERNAL_ERROR(c, error.message || '导入库存失败', {
@@ -311,7 +312,7 @@ app.post('/inventory', adminAuth, async (c) => {
     console.error('添加库存失败:', error)
 
     if (error instanceof z.ZodError) {
-      return errors.VALIDATION_ERROR(c, '参数验证失败', error.errors)
+      return errors.VALIDATION_ERROR(c, '参数验证失败', error.issues)
     }
 
     return errors.INTERNAL_ERROR(c, error.message || '添加库存失败', {
@@ -354,7 +355,7 @@ app.delete('/inventory/:productId/items', adminAuth, async (c) => {
     console.error('删除库存失败:', error)
 
     if (error instanceof z.ZodError) {
-      return errors.VALIDATION_ERROR(c, '参数验证失败', error.errors)
+      return errors.VALIDATION_ERROR(c, '参数验证失败', error.issues)
     }
 
     return errors.INTERNAL_ERROR(c, error.message || '删除库存失败', {
@@ -492,7 +493,7 @@ app.post('/inventory/deduct', adminAuth, async (c) => {
 
     if (error instanceof z.ZodError) {
       return c.json(
-        { success: false, error: '参数验证失败', details: error.errors },
+        { success: false, error: '参数验证失败', details: error.issues },
         400
       )
     }
@@ -527,7 +528,7 @@ app.post('/inventory/restock', adminAuth, async (c) => {
 
     if (error instanceof z.ZodError) {
       return c.json(
-        { success: false, error: '参数验证失败', details: error.errors },
+        { success: false, error: '参数验证失败', details: error.issues },
         400
       )
     }

@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import { db, schema } from '../db'
-import { eq, and, lt, gt } from 'drizzle-orm'
+import { eq, and, lt, gt, sql } from 'drizzle-orm'
 import { auditService } from './audit-service'
 import { securityService } from './security-service'
 
@@ -98,9 +98,8 @@ export class WebhookSecurityService {
         isValid,
         method: 'rsa2_sha256',
         gatewayOrderId,
-        amount,
-        timestamp,
-        error: isValid ? undefined : 'RSA2 signature verification failed'
+        amount: amount || undefined,
+        timestamp: timestamp || undefined
       }
     } catch (error) {
       console.error('Alipay webhook verification error:', error)
@@ -235,7 +234,7 @@ export class WebhookSecurityService {
       if (rawRecord.length > 0) {
         return {
           isProcessed: true,
-          processedAt: rawRecord[0].processedAt
+          processedAt: rawRecord[0].processedAt || undefined
         }
       }
 
@@ -277,7 +276,7 @@ export class WebhookSecurityService {
         .limit(1)
 
       if (orderRecord.length === 0) {
-        return { isValid: false, error: 'Order not found' }
+        return { isValid: false }
       }
 
       const order = orderRecord[0]
@@ -346,8 +345,7 @@ export class WebhookSecurityService {
     try {
       await db.update(schema.paymentsRaw)
         .set({
-          ...updates,
-          updatedAt: new Date().toISOString()
+          ...updates
         })
         .where(eq(schema.paymentsRaw.id, parseInt(recordId)))
     } catch (error) {
@@ -580,19 +578,19 @@ export class WebhookSecurityService {
       const byGateway: Record<string, number> = {}
       const bySignatureMethod: Record<string, number> = {}
 
-      gatewayStats.forEach(stat => {
+      gatewayStats.forEach((stat: any) => {
         byGateway[stat.gateway] = stat.count
       })
 
-      signatureMethodStats.forEach(stat => {
+      signatureMethodStats.forEach((stat: any) => {
         bySignatureMethod[stat.method || 'unknown'] = stat.count
       })
 
       return {
-        totalWebhooks: total,
-        successfulWebhooks: successful,
-        failedWebhooks: failed,
-        successRate: total > 0 ? (successful / total * 100) : 0,
+        totalWebhooks: total as number,
+        successfulWebhooks: successful as number,
+        failedWebhooks: failed as number,
+        successRate: (total as number) > 0 ? ((successful as number) / (total as number) * 100) : 0,
         byGateway,
         bySignatureMethod
       }

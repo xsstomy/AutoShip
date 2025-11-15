@@ -23,11 +23,11 @@ interface ApiError {
 /**
  * 创建成功响应
  */
-export function successResponse<T>(c: Context, data: T, httpStatus = 200) {
+export function successResponse<T>(c: Context, data: T, httpStatus: number = 200) {
   return c.json({
     success: true,
     data,
-  }, httpStatus)
+  }, httpStatus as any)
 }
 
 /**
@@ -37,7 +37,7 @@ export function errorResponse(
   c: Context,
   code: string,
   message: string,
-  httpStatus = 400,
+  httpStatus: number = 400,
   details?: any
 ) {
   return c.json({
@@ -47,7 +47,7 @@ export function errorResponse(
       message,
       ...(details && { details }),
     }
-  }, httpStatus)
+  }, httpStatus as any)
 }
 
 /**

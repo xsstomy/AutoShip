@@ -1,24 +1,31 @@
 import { Hono } from 'hono'
 import { webhookProcessingService } from '../services/webhook-processing-service'
 import { orderStateService } from '../services/order-state-service'
-import {
-  adminAuth,
-  adminRateLimit,
-  adminRequestLogging,
-  corsSecurity,
-  adminCorsSecurity,
-  allSecurityHeaders
-} from '../middleware'
+import { adminAuth } from '../middleware/admin-jwt-auth'
+import { adminRateLimit } from '../middleware/rate-limit'
+import { adminRequestLogging } from '../middleware/request-logging'
+import { corsSecurity, adminCorsSecurity, allSecurityHeaders } from '../middleware/cors-security'
 
 const app = new Hono()
 
 // 全局安全中间件 - 对所有管理员路由应用
-app.use('*', corsSecurity())
-app.use('*', adminCorsSecurity())
-app.use('*', allSecurityHeaders())
-app.use('*', adminRequestLogging())
-app.use('*', adminRateLimit())
-app.use('*', adminAuth())
+app.use('*', async (c, next) => {
+  await corsSecurity()(c, next)
+})
+app.use('*', async (c, next) => {
+  await adminCorsSecurity()(c, next)
+})
+// 应用所有安全头部中间件
+app.use('*', ...allSecurityHeaders())
+app.use('*', async (c, next) => {
+  await adminRequestLogging()(c, next)
+})
+app.use('*', async (c, next) => {
+  await adminRateLimit()(c, next)
+})
+app.use('*', async (c, next) => {
+  await adminAuth(c, next)
+})
 
 /**
  * 获取Webhook统计信息

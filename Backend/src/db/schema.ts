@@ -522,10 +522,19 @@ export const AdminEventType = {
   ACCOUNT_UNLOCKED: 'account_unlocked',
   PROFILE_UPDATE: 'profile_update',
   PERMISSION_DENIED: 'permission_denied',
+  PRODUCT_CREATE: 'product_create',
+  PRODUCT_UPDATE: 'product_update',
+  PRODUCT_DELETE: 'product_delete',
+  ORDER_RESEND: 'order_resend',
+  ORDER_REFUND: 'order_refund',
 } as const
 
 export const AdminEventCategory = {
   AUTH: 'auth',
   ACTION: 'action',
   SECURITY: 'security',
+  PRODUCT_MANAGEMENT: 'product_management',
+  ORDER_MANAGEMENT: 'order_management',
+  INVENTORY_MANAGEMENT: 'inventory_management',
+  SYSTEM_CONFIG: 'system_config',
 } as const

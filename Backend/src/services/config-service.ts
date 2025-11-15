@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { db, schema } from '../db'
-import { eq, and, lt, gt } from 'drizzle-orm'
+import { eq, and, lt, gt, sql } from 'drizzle-orm'
 import { auditService } from './audit-service'
 import { securityService } from './security-service'
 
@@ -9,7 +9,7 @@ const ConfigValueSchema = z.union([
   z.string(),
   z.number(),
   z.boolean(),
-  z.record(z.unknown()), // JSON object
+  z.record(z.string(), z.unknown()), // JSON object
 ])
 
 const ConfigItemSchema = z.object({
@@ -95,12 +95,12 @@ export class ConfigService {
       let value = config.configValue
 
       // 如果是加密配置，解密
-      if (config.isEncrypted) {
+      if (config.isEncrypted && value !== null) {
         value = this.decryptConfigValue(value)
       }
 
       // 解析配置值
-      const parsedValue = this.parseConfigValue(value, config.dataType)
+      const parsedValue = value !== null ? this.parseConfigValue(value, config.dataType) : null
 
       // 验证配置值
       const validationResult = this.validateConfigValue(parsedValue, config.validationRule)
@@ -206,7 +206,7 @@ export class ConfigService {
             isPublic,
             description,
             validationRule,
-            version: existingRecord[0].version + 1,
+            version: (existingRecord[0]?.version || 0) + 1,
             updatedAt: now,
             updatedBy
           })
@@ -390,7 +390,7 @@ export class ConfigService {
   /**
    * 验证配置值
    */
-  private validateConfigValue(value: any, rule?: string): { isValid: boolean; error?: string } {
+  private validateConfigValue(value: any, rule?: string | null): { isValid: boolean; error?: string } {
     if (!rule) return { isValid: true }
 
     try {
@@ -459,7 +459,7 @@ export class ConfigService {
   /**
    * 解析配置值
    */
-  private parseConfigValue(value: any, dataType: string): any {
+  private parseConfigValue(value: string | null, dataType: string): any {
     switch (dataType) {
       case 'number':
         return typeof value === 'string' ? parseFloat(value) : value
@@ -490,7 +490,9 @@ export class ConfigService {
   /**
    * 解密配置值
    */
-  private decryptConfigValue(encryptedValue: string): any {
+  private decryptConfigValue(encryptedValue: string | null): any {
+    if (!encryptedValue) return null
+
     try {
       const encrypted = JSON.parse(encryptedValue)
       const decrypted = securityService.decrypt(encrypted.encrypted, encrypted.iv, encrypted.tag)
@@ -592,17 +594,21 @@ export class ConfigService {
       const byDataType: Record<string, number> = {}
 
       groupStats.forEach(stat => {
-        byGroup[stat.group] = stat.count
+        if (stat.group) {
+          byGroup[stat.group] = Number(stat.count)
+        }
       })
 
       typeStats.forEach(stat => {
-        byDataType[stat.dataType] = stat.count
+        if (stat.dataType) {
+          byDataType[stat.dataType] = Number(stat.count)
+        }
       })
 
       return {
-        totalConfigs: total,
-        encryptedConfigs: encrypted,
-        publicConfigs: publicCount,
+        totalConfigs: Number(total),
+        encryptedConfigs: Number(encrypted),
+        publicConfigs: Number(publicCount),
         byGroup,
         byDataType
       }
@@ -640,7 +646,7 @@ export class ConfigService {
           continue
         }
 
-        result[config.groupKey][config.configKey] = this.parseConfigValue(value, config.dataType)
+        result[config.groupKey][config.configKey] = this.parseConfigValue(value || null, config.dataType)
       }
 
       return result

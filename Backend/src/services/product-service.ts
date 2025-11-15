@@ -481,7 +481,7 @@ export class ProductService {
         templateText: originalProduct.templateText,
         deliveryType: originalProduct.deliveryType,
         isActive: false, // 复制的产品默认不激活
-        sortOrder: originalProduct.sortOrder + 1,
+        sortOrder: (originalProduct.sortOrder || 0) + 1,
       }).returning()
 
       // 复制价格信息

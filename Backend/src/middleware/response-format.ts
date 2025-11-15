@@ -29,24 +29,26 @@ export function responseFormatter(options: ResponseFormatOptions = {}) {
     const originalJson = c.json.bind(c)
 
     // 重写c.text以支持统一格式
-    c.text = (body: string, status: number = 200) => {
-      if (status >= 400) {
+    c.text = (body: string, status?: any) => {
+      const httpStatus = status || 200
+      if (httpStatus >= 400) {
         // 错误响应使用统一格式
-        return originalJson({
+        return (originalJson as any)({
           success: false,
           error: body,
           code: 'TEXT_ERROR',
           timestamp: includeTimestamp ? new Date().toISOString() : undefined,
           requestId: includeRequestId ? requestId : undefined,
           version: includeVersion ? version : undefined
-        }, status)
+        }, httpStatus)
       }
-      return originalSend(body, status)
+      return (originalSend as any)(body, httpStatus)
     }
 
     // 重写c.json以支持统一格式
-    c.json = (data: any, status: number = 200) => {
-      if (status >= 400) {
+    c.json = (data: any, status?: any) => {
+      const httpStatus = status || 200
+      if (httpStatus >= 400) {
         // 错误响应已经是统一格式，检查是否需要补充字段
         if (typeof data === 'object' && data !== null) {
           if (includeTimestamp && !data.timestamp) {
@@ -59,7 +61,7 @@ export function responseFormatter(options: ResponseFormatOptions = {}) {
             data.version = version
           }
         }
-        return originalJson(data, status)
+        return (originalJson as any)(data, httpStatus)
       } else {
         // 成功响应使用统一格式
         const formattedData = {
@@ -72,7 +74,7 @@ export function responseFormatter(options: ResponseFormatOptions = {}) {
 
         // 移除undefined字段
         const cleanedData = removeUndefinedFields(formattedData)
-        return originalJson(cleanedData, status)
+        return (originalJson as any)(cleanedData, httpStatus)
       }
     }
 
@@ -115,7 +117,7 @@ export function webhookResponseFormatter() {
   return async (c: Context, next: Next) => {
     // Webhook路由可能需要特殊处理
     // 例如支付宝需要返回'success'字符串而不是JSON
-    if (c.req.path().includes('/webhooks/')) {
+    if (c.req.path.includes('/webhooks/')) {
       await next()
       return
     }

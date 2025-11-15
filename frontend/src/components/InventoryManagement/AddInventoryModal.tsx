@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { addInventory } from '../../services/inventoryApi'
+import { ADMIN_API_URL } from '../../config/api'
 
 interface AddInventoryModalProps {
   isOpen: boolean
@@ -36,7 +37,7 @@ export default function AddInventoryModal({ isOpen, onClose, onSuccess }: AddInv
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/v1/admin/products?page=1&limit=100', {
+      const response = await fetch(`${ADMIN_API_URL}/products?page=1&limit=100`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('admin_token')}`,
         },

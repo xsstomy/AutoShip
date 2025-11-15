@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { adminUserRepository, adminSessionRepository, adminAuditLogRepository } from '../db'
+import { adminUserRepository, adminSessionRepository, adminAuditLogRepository, db, schema, eq } from '../db'
 import {
   hashPassword,
   verifyPassword,
@@ -20,8 +20,9 @@ import {
   AdminEventCategory,
   AdminRole,
 } from '../db/schema'
+import type { AppContext, AdminUser } from '../types/admin'
 
-const app = new Hono()
+const app = new Hono<{ Variables: { admin: AdminUser; sessionId: string } }>()
 
 // 登录请求验证模式
 const loginSchema = z.object({
@@ -56,18 +57,22 @@ app.post('/login', async (c) => {
 
     if (!admin) {
       // 记录失败尝试（即使用户不存在）
-      await adminAuditLogRepository.create({
-        adminId: null,
-        eventType: AdminEventType.LOGIN_FAILED,
-        eventCategory: AdminEventCategory.AUTH,
-        severity: 'warning',
-        ipAddress: clientIP,
-        userAgent,
-        requestPath: c.req.path,
-        requestMethod: 'POST',
-        success: false,
-        errorMessage: 'Invalid username or password',
-      })
+      try {
+        await db.insert(schema.adminAuditLogs).values({
+          adminId: null,
+          eventType: AdminEventType.LOGIN_FAILED,
+          eventCategory: AdminEventCategory.AUTH,
+          severity: 'warning',
+          ipAddress: clientIP,
+          userAgent,
+          requestPath: c.req.path,
+          requestMethod: 'POST',
+          success: false,
+          errorMessage: 'Invalid username or password',
+        })
+      } catch (error) {
+        // 忽略审计日志错误
+      }
 
       return c.json({
         success: false,
@@ -77,7 +82,7 @@ app.post('/login', async (c) => {
 
     // 检查账户是否被锁定
     if (admin.lockedUntil && isAccountLocked(admin.lockedUntil)) {
-      await adminAuditLogRepository.create({
+      await db.insert(schema.adminAuditLogs).values({
         adminId: admin.id,
         eventType: AdminEventType.ACCOUNT_LOCKED,
         eventCategory: AdminEventCategory.SECURITY,
@@ -99,7 +104,7 @@ app.post('/login', async (c) => {
 
     // 检查账户是否激活
     if (!admin.isActive) {
-      await adminAuditLogRepository.create({
+      await db.insert(schema.adminAuditLogs).values({
         adminId: admin.id,
         eventType: AdminEventType.LOGIN_FAILED,
         eventCategory: AdminEventCategory.AUTH,
@@ -128,9 +133,9 @@ app.post('/login', async (c) => {
       if (failedAttempts >= 5) {
         // 锁定账户
         const lockUntil = getLockExpiryDate()
-        await adminUserRepository.lockAccount(admin.id, lockUntil)
+        await adminUserRepository.lockAccount(Number(admin.id), lockUntil)
 
-        await adminAuditLogRepository.create({
+        await db.insert(schema.adminAuditLogs).values({
           adminId: admin.id,
           eventType: AdminEventType.ACCOUNT_LOCKED,
           eventCategory: AdminEventCategory.SECURITY,
@@ -146,12 +151,12 @@ app.post('/login', async (c) => {
         return c.json({
           success: false,
           error: '登录失败次数过多，账户已被锁定30分钟',
-          lockedUntil,
+          lockedUntil: lockUntil,
         }, 423)
       } else {
-        await adminUserRepository.incrementFailedAttempts(admin.id)
+        await adminUserRepository.incrementFailedAttempts(Number(admin.id))
 
-        await adminAuditLogRepository.create({
+        await db.insert(schema.adminAuditLogs).values({
           adminId: admin.id,
           eventType: AdminEventType.LOGIN_FAILED,
           eventCategory: AdminEventCategory.AUTH,
@@ -186,7 +191,7 @@ app.post('/login', async (c) => {
     expiresAt.setHours(expiresAt.getHours() + 8) // 8小时后过期
 
     // 创建会话记录
-    await adminSessionRepository.create({
+    await db.insert(schema.adminSessions).values({
       adminId: admin.id,
       sessionId,
       tokenHash,
@@ -196,10 +201,10 @@ app.post('/login', async (c) => {
     })
 
     // 更新最后登录信息
-    await adminUserRepository.updateLastLogin(admin.id, clientIP)
+    await adminUserRepository.updateLastLogin(Number(admin.id), clientIP)
 
     // 记录成功登录
-    await adminAuditLogRepository.create({
+    await db.insert(schema.adminAuditLogs).values({
       adminId: admin.id,
       sessionId,
       eventType: AdminEventType.LOGIN_SUCCESS,
@@ -234,7 +239,7 @@ app.post('/login', async (c) => {
     if (error instanceof z.ZodError) {
       return c.json({
         success: false,
-        error: error.errors[0].message,
+        error: error.issues[0].message,
       }, 400)
     }
 
@@ -260,7 +265,7 @@ app.post('/logout', async (c) => {
         await adminSessionRepository.deactivateSession(payload.sessionId)
 
         // 记录登出事件
-        await adminAuditLogRepository.create({
+        await db.insert(schema.adminAuditLogs).values({
           adminId: payload.adminId,
           sessionId: payload.sessionId,
           eventType: AdminEventType.LOGOUT,
@@ -408,11 +413,13 @@ app.post('/refresh', async (c) => {
     expiresAt.setHours(expiresAt.getHours() + 8)
 
     // 更新会话
-    await adminSessionRepository.update(session.id, {
-      tokenHash: newTokenHash,
-      expiresAt: expiresAt.toISOString(),
-      lastActivityAt: new Date().toISOString(),
-    })
+    await db.update(schema.adminSessions)
+      .set({
+        tokenHash: newTokenHash,
+        expiresAt: expiresAt.toISOString(),
+        lastActivityAt: new Date().toISOString(),
+      })
+      .where(eq(schema.adminSessions.id, session.id))
 
     // 设置新Cookie
     c.header('Set-Cookie', `admin_token=${newToken}; HttpOnly; Secure; SameSite=Strict; Max-Age=28800; Path=/`)
@@ -484,10 +491,10 @@ app.post('/change-password', async (c) => {
     }
 
     // 验证当前密码
-    const isCurrentPasswordValid = await verifyPassword(currentPassword, admin.passwordHash)
+    const isCurrentPasswordValid = await verifyPassword(currentPassword, admin.passwordHash as unknown as string)
 
     if (!isCurrentPasswordValid) {
-      await adminAuditLogRepository.create({
+      await db.insert(schema.adminAuditLogs).values({
         adminId: admin.id,
         eventType: AdminEventType.PASSWORD_CHANGE,
         eventCategory: AdminEventCategory.AUTH,
@@ -510,13 +517,13 @@ app.post('/change-password', async (c) => {
     const newPasswordHash = await hashPassword(newPassword)
 
     // 更新密码
-    await adminUserRepository.updatePassword(admin.id, newPasswordHash)
+    await adminUserRepository.updatePassword(Number(admin.id), newPasswordHash)
 
     // 停用所有会话，强制重新登录
-    await adminSessionRepository.deactivateAllAdminSessions(admin.id)
+    await adminSessionRepository.deactivateAllAdminSessions(Number(admin.id))
 
     // 记录密码修改
-    await adminAuditLogRepository.create({
+    await db.insert(schema.adminAuditLogs).values({
       adminId: admin.id,
       eventType: AdminEventType.PASSWORD_CHANGE,
       eventCategory: AdminEventCategory.SECURITY,
@@ -541,7 +548,7 @@ app.post('/change-password', async (c) => {
     if (error instanceof z.ZodError) {
       return c.json({
         success: false,
-        error: error.errors[0].message,
+        error: error.issues[0].message,
       }, 400)
     }
 

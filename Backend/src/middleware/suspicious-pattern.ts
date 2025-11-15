@@ -31,7 +31,7 @@ export function suspiciousPatternDetection(options: SuspiciousPatternOptions = {
   return async (c: Context, next: Next) => {
     const clientIP = getClientIP(c)
     const userAgent = c.req.header('user-agent') || ''
-    const path = c.req.path()
+    const path = c.req.path
     const now = Date.now()
 
     // 获取或创建IP记录
@@ -76,7 +76,14 @@ export function suspiciousPatternDetection(options: SuspiciousPatternOptions = {
       ip: clientIP,
       userAgent,
       path,
-      headers: Object.fromEntries(c.req.headers()),
+      headers: {
+        'user-agent': userAgent,
+        'content-type': c.req.header('content-type') || '',
+        'x-forwarded-for': c.req.header('x-forwarded-for') || '',
+        'x-real-ip': c.req.header('x-real-ip') || '',
+        'referer': c.req.header('referer') || '',
+        'origin': c.req.header('origin') || ''
+      },
       maxRequestsPerMinute,
       maxFailedRequests
     })

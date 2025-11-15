@@ -268,7 +268,7 @@ export class PerformanceService {
       // 简化版模式匹配
       const keys = Array.from((this.cache as any).cache.keys())
       for (const key of keys) {
-        if (key.includes(pattern)) {
+        if (typeof key === 'string' && key.includes(pattern)) {
           this.cache.delete(key)
         }
       }
@@ -394,7 +394,7 @@ export class PerformanceService {
     } catch (error) {
       return {
         status: 'Error',
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
         lastChecked: new Date().toISOString(),
       }
     }

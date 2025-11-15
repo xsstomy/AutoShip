@@ -1,14 +1,30 @@
 import Database from 'better-sqlite3'
-import { drizzle } from 'drizzle-orm/better-sqlite3'
+import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import * as schema from './schema'
-import { eq, and, desc, asc, like, count } from 'drizzle-orm'
+import { eq, and, desc, asc, like, count, sql } from 'drizzle-orm'
 
 // 数据库连接配置
 const DATABASE_URL = process.env.DATABASE_URL || './database.db'
 
 // 创建数据库连接
-export const sqlite = new Database(DATABASE_URL)
+const sqlite = new Database(DATABASE_URL)
+
+// 创建Drizzle实例
+export const db = drizzle(sqlite, { schema })
+
+// 添加 execute 方法支持原始 SQL 查询
+;(db as any).execute = (sql: string, params?: any[]) => {
+  try {
+    const stmt = sqlite.prepare(sql)
+    if (params) {
+      return stmt.all(...params)
+    }
+    return stmt.all()
+  } catch (error) {
+    throw error
+  }
+}
 
 // 配置数据库性能优化
 sqlite.pragma('journal_mode = WAL')
@@ -16,9 +32,6 @@ sqlite.pragma('synchronous = NORMAL')
 sqlite.pragma('cache_size = 1000000')
 sqlite.pragma('temp_store = MEMORY')
 sqlite.pragma('mmap_size = 268435456') // 256MB
-
-// 创建Drizzle实例
-export const db = drizzle(sqlite, { schema })
 
 // 数据库初始化函数
 export async function initializeDatabase() {
@@ -563,7 +576,7 @@ export async function getDatabaseStats() {
 }
 
 // 事务辅助函数 - 正确的异步事务实现
-export async function withTransaction<T>(callback: (tx: typeof db) => Promise<T>): Promise<T> {
+export async function withTransaction<T>(callback: (tx: any) => Promise<T>): Promise<T> {
   // Drizzle 事务本身返回 Promise，不需要额外的 await 包装
   return db.transaction(callback)
 }
@@ -574,16 +587,16 @@ export class BaseRepository<T extends Record<string, any>> {
 
   async create(data: Partial<T>): Promise<T> {
     const result = await db.insert(this.table).values(data as any).returning()
-    return result[0] as T
+    return (result as any[])[0] as T
   }
 
   async findById(id: string | number): Promise<T | null> {
     const result = await db.select().from(this.table).where(eq(this.table.id, id)).limit(1)
-    return result[0] || null
+    return (result as any[])[0] || null
   }
 
   async findOne(conditions: Partial<T>): Promise<T | null> {
-    let query = db.select().from(this.table)
+    let query: any = db.select().from(this.table)
 
     for (const [key, value] of Object.entries(conditions)) {
       if (value !== undefined) {
@@ -592,7 +605,7 @@ export class BaseRepository<T extends Record<string, any>> {
     }
 
     const result = await query.limit(1)
-    return result[0] || null
+    return (result as any[])[0] || null
   }
 
   async findMany(
@@ -603,7 +616,7 @@ export class BaseRepository<T extends Record<string, any>> {
       orderBy?: { field: keyof T; direction: 'asc' | 'desc' }
     } = {}
   ): Promise<T[]> {
-    let query = db.select().from(this.table)
+    let query: any = db.select().from(this.table)
 
     // 应用条件
     for (const [key, value] of Object.entries(conditions)) {
@@ -637,7 +650,7 @@ export class BaseRepository<T extends Record<string, any>> {
       .where(eq(this.table.id, id))
       .returning()
 
-    return result[0] || null
+    return (result as any[])[0] || null
   }
 
   async delete(id: string | number): Promise<boolean> {
@@ -646,7 +659,7 @@ export class BaseRepository<T extends Record<string, any>> {
   }
 
   async count(conditions: Partial<T> = {}): Promise<number> {
-    let query = db.select({ count: count() }).from(this.table)
+    let query: any = db.select({ count: count() }).from(this.table)
 
     for (const [key, value] of Object.entries(conditions)) {
       if (value !== undefined) {
@@ -660,7 +673,7 @@ export class BaseRepository<T extends Record<string, any>> {
 }
 
 // 特定仓储类
-export class ProductRepository extends BaseRepository<typeof schema.Product> {
+export class ProductRepository extends BaseRepository<typeof schema.products> {
   constructor() {
     super(schema.products)
   }
@@ -673,23 +686,37 @@ export class ProductRepository extends BaseRepository<typeof schema.Product> {
   }
 
   async findWithPrices(productId?: number) {
-    let query = db
+    const query = db
       .select({
-        ...schema.products,
-        prices: schema.productPrices,
+        id: schema.products.id,
+        name: schema.products.name,
+        description: schema.products.description,
+        templateText: schema.products.templateText,
+        deliveryType: schema.products.deliveryType,
+        isActive: schema.products.isActive,
+        sortOrder: schema.products.sortOrder,
+        createdAt: schema.products.createdAt,
+        updatedAt: schema.products.updatedAt,
+        priceId: schema.productPrices.id,
+        priceProductId: schema.productPrices.productId,
+        priceCurrency: schema.productPrices.currency,
+        price: schema.productPrices.price,
+        priceIsActive: schema.productPrices.isActive,
+        priceCreatedAt: schema.productPrices.createdAt,
+        priceUpdatedAt: schema.productPrices.updatedAt,
       })
       .from(schema.products)
       .leftJoin(schema.productPrices, eq(schema.products.id, schema.productPrices.productId))
 
     if (productId) {
-      query = query.where(eq(schema.products.id, productId))
+      return await query.where(eq(schema.products.id, productId))
     }
 
     return await query
   }
 }
 
-export class OrderRepository extends BaseRepository<typeof schema.Order> {
+export class OrderRepository extends BaseRepository<typeof schema.orders> {
   constructor() {
     super(schema.orders)
   }
@@ -709,7 +736,7 @@ export class OrderRepository extends BaseRepository<typeof schema.Order> {
   }
 
   async findWithDetails(orderId: string) {
-    return await db
+    const query: any = db
       .select({
         order: schema.orders,
         product: schema.products,
@@ -720,10 +747,12 @@ export class OrderRepository extends BaseRepository<typeof schema.Order> {
       .leftJoin(schema.deliveries, eq(schema.orders.id, schema.deliveries.orderId))
       .where(eq(schema.orders.id, orderId))
       .limit(1)
+
+    return await query
   }
 }
 
-export class InventoryRepository extends BaseRepository<typeof schema.InventoryText> {
+export class InventoryRepository extends BaseRepository<typeof schema.inventoryText> {
   constructor() {
     super(schema.inventoryText)
   }
@@ -787,10 +816,13 @@ export class AdminUserRepository extends BaseRepository<typeof schema.adminUsers
   }
 
   async incrementFailedAttempts(id: number) {
+    const admin = await db.select().from(schema.adminUsers).where(eq(schema.adminUsers.id, id)).get()
+    if (!admin) return null
+
     return await db
       .update(schema.adminUsers)
       .set({
-        failedLoginAttempts: schema.adminUsers.failedLoginAttempts + 1,
+        failedLoginAttempts: (admin.failedLoginAttempts || 0) + 1,
       })
       .where(eq(schema.adminUsers.id, id))
       .returning()
@@ -878,7 +910,7 @@ export class AdminSessionRepository extends BaseRepository<typeof schema.adminSe
       .set({
         isActive: false,
       })
-      .where(eq(schema.adminSessions.expiresAt, new Date().toISOString()))
+      .where(sql`${schema.adminSessions.expiresAt} < ${new Date().toISOString()}`)
       .returning()
   }
 }
@@ -946,7 +978,6 @@ export {
 // 默认导出
 export default {
   db,
-  sqlite,
   initializeDatabase,
   initDatabase,
   healthCheck,

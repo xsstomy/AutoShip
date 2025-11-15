@@ -1,4 +1,5 @@
 import { Context, Next } from 'hono'
+import * as crypto from 'crypto'
 import { db, schema } from '../db'
 import { eq, and, lt, gt, sql } from 'drizzle-orm'
 import { auditService } from './audit-service'
@@ -80,7 +81,7 @@ export class IntegratedSecurityService {
           adminCorsSecurity(),
           adminRequestLogging(),
           adminRateLimit(),
-          adminAuth()
+          adminAuth
         )
         break
 
@@ -283,10 +284,10 @@ export class IntegratedSecurityService {
         .where(sql`${schema.auditLogs.createdAt} >= ${startDate}`)
 
       const overview = {
-        totalEvents: overviewStats[0].totalEvents || 0,
-        criticalEvents: overviewStats[0].criticalEvents || 0,
-        riskScore: Math.round(overviewStats[0].avgRiskScore || 0),
-        activeThreats: overviewStats[0].suspiciousEvents || 0
+        totalEvents: Number(overviewStats[0]?.totalEvents) || 0,
+        criticalEvents: Number(overviewStats[0]?.criticalEvents) || 0,
+        riskScore: Math.round(Number(overviewStats[0]?.avgRiskScore) || 0),
+        activeThreats: Number(overviewStats[0]?.suspiciousEvents) || 0
       }
 
       // 获取Webhook统计
@@ -314,8 +315,8 @@ export class IntegratedSecurityService {
         .where(sql`${schema.rateLimits.lastViolationAt} >= ${startDate}`)
 
       const rateLimitMetrics = {
-        totalViolations: rateLimitStats[0].totalViolations || 0,
-        activeBlocks: rateLimitStats[0].activeBlocks || 0,
+        totalViolations: Number(rateLimitStats[0]?.totalViolations) || 0,
+        activeBlocks: Number(rateLimitStats[0]?.activeBlocks) || 0,
         topViolators: [] // TODO: 实现Top违规者查询
       }
 

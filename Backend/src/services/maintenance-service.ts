@@ -1,5 +1,5 @@
 import { db, schema } from '../db'
-import { eq, and, lt, desc } from 'drizzle-orm'
+import { eq, and, lt, desc, sql, count } from 'drizzle-orm'
 import { OrderStatus } from '../db/schema'
 import { auditService } from './audit-service'
 import { backupService } from './backup-service'
@@ -56,7 +56,7 @@ export class MaintenanceService {
       }
 
     } catch (error) {
-      const errorMessage = `Maintenance failed: ${error.message}`
+      const errorMessage = `Maintenance failed: ${error instanceof Error ? error.message : String(error)}`
       console.error('❌', errorMessage)
       errors.push(errorMessage)
 
@@ -66,7 +66,7 @@ export class MaintenanceService {
         action: 'maintenance_failed',
         resourceType: 'system',
         success: false,
-        errorMessage: error.message,
+        errorMessage: error instanceof Error ? error.message : String(error),
       })
 
       return {
@@ -104,7 +104,7 @@ export class MaintenanceService {
       }
 
     } catch (error) {
-      const errorMsg = `Failed to cleanup expired orders: ${error.message}`
+      const errorMsg = `Failed to cleanup expired orders: ${error instanceof Error ? error.message : String(error)}`
       errors.push(errorMsg)
       console.error('❌', errorMsg)
       return { cleaned: 0, errors }
@@ -121,7 +121,7 @@ export class MaintenanceService {
       const result = await db.delete(schema.inventoryText)
         .where(and(
           eq(schema.inventoryText.isUsed, false),
-          `${schema.inventoryText.expiresAt} IS NOT NULL`,
+          sql`${schema.inventoryText.expiresAt} IS NOT NULL`,
           lt(schema.inventoryText.expiresAt, new Date().toISOString())
         ))
 
@@ -133,7 +133,7 @@ export class MaintenanceService {
       }
 
     } catch (error) {
-      const errorMsg = `Failed to cleanup expired inventory: ${error.message}`
+      const errorMsg = `Failed to cleanup expired inventory: ${error instanceof Error ? error.message : String(error)}`
       errors.push(errorMsg)
       console.error('❌', errorMsg)
       return { cleaned: 0, errors }
@@ -163,7 +163,7 @@ export class MaintenanceService {
       }
 
     } catch (error) {
-      const errorMsg = `Failed to cleanup old payment callbacks: ${error.message}`
+      const errorMsg = `Failed to cleanup old payment callbacks: ${error instanceof Error ? error.message : String(error)}`
       errors.push(errorMsg)
       console.error('❌', errorMsg)
       return { cleaned: 0, errors }
@@ -190,7 +190,7 @@ export class MaintenanceService {
       }
 
     } catch (error) {
-      const errorMsg = `Failed to cleanup old downloads: ${error.message}`
+      const errorMsg = `Failed to cleanup old downloads: ${error instanceof Error ? error.message : String(error)}`
       errors.push(errorMsg)
       console.error('❌', errorMsg)
       return { cleaned: 0, errors }
@@ -220,7 +220,7 @@ export class MaintenanceService {
       }
 
     } catch (error) {
-      const errorMsg = `Failed to cleanup old audit logs: ${error.message}`
+      const errorMsg = `Failed to cleanup old audit logs: ${error instanceof Error ? error.message : String(error)}`
       errors.push(errorMsg)
       console.error('❌', errorMsg)
       return { cleaned: 0, errors }
@@ -238,7 +238,7 @@ export class MaintenanceService {
       const result = await db.delete(schema.deliveries)
         .where(and(
           eq(schema.deliveries.isActive, true),
-          `${schema.deliveries.expiresAt} IS NOT NULL`,
+          sql`${schema.deliveries.expiresAt} IS NOT NULL`,
           lt(schema.deliveries.expiresAt, new Date().toISOString())
         ))
 
@@ -250,7 +250,7 @@ export class MaintenanceService {
       }
 
     } catch (error) {
-      const errorMsg = `Failed to cleanup invalid downloads: ${error.message}`
+      const errorMsg = `Failed to cleanup invalid downloads: ${error instanceof Error ? error.message : String(error)}`
       errors.push(errorMsg)
       console.error('❌', errorMsg)
       return { cleaned: 0, errors }
@@ -276,7 +276,7 @@ export class MaintenanceService {
       }
 
     } catch (error) {
-      const errorMsg = `Failed to optimize database: ${error.message}`
+      const errorMsg = `Failed to optimize database: ${error instanceof Error ? error.message : String(error)}`
       errors.push(errorMsg)
       console.error('❌', errorMsg)
       return { optimized: false, errors }
@@ -291,20 +291,20 @@ export class MaintenanceService {
 
     try {
       // 获取当前统计信息
-      const stats = {
-        products: await db.select({ count: { count: 'count' } }).from(schema.products),
-        orders: await db.select({ count: { count: 'count' } }).from(schema.orders),
-        deliveries: await db.select({ count: { count: 'count' } }).from(schema.deliveries),
-        downloads: await db.select({ count: { count: 'count' } }).from(schema.downloads),
-        inventoryText: await db.select({ count: { count: 'count' } }).from(schema.inventoryText),
-      }
+      const [productCount, orderCount, deliveryCount, downloadCount, inventoryCount] = await Promise.all([
+        db.select({ count: count() }).from(schema.products),
+        db.select({ count: count() }).from(schema.orders),
+        db.select({ count: count() }).from(schema.deliveries),
+        db.select({ count: count() }).from(schema.downloads),
+        db.select({ count: count() }).from(schema.inventoryText),
+      ])
 
       const statsSummary = {
-        products: (stats as any)[0]?.count?.count || 0,
-        orders: (stats as any)[1]?.count?.count || 0,
-        deliveries: (stats as any)[2]?.count?.count || 0,
-        downloads: (stats as any)[3]?.count?.count || 0,
-        inventoryText: (stats as any)[4]?.count?.count || 0,
+        products: productCount[0]?.count || 0,
+        orders: orderCount[0]?.count || 0,
+        deliveries: deliveryCount[0]?.count || 0,
+        downloads: downloadCount[0]?.count || 0,
+        inventoryText: inventoryCount[0]?.count || 0,
         updatedAt: new Date().toISOString(),
       }
 
@@ -317,7 +317,7 @@ export class MaintenanceService {
       }
 
     } catch (error) {
-      const errorMsg = `Failed to update statistics: ${error.message}`
+      const errorMsg = `Failed to update statistics: ${error instanceof Error ? error.message : String(error)}`
       errors.push(errorMsg)
       console.error('❌', errorMsg)
       return { updated: false, errors }
@@ -341,7 +341,7 @@ export class MaintenanceService {
       }
 
     } catch (error) {
-      const errorMsg = `Failed to cleanup old backups: ${error.message}`
+      const errorMsg = `Failed to cleanup old backups: ${error instanceof Error ? error.message : String(error)}`
       errors.push(errorMsg)
       console.error('❌', errorMsg)
       return { cleaned: 0, errors }
@@ -404,7 +404,7 @@ export class MaintenanceService {
       }
 
     } catch (error) {
-      issues.push(`Health check failed: ${error.message}`)
+      issues.push(`Health check failed: ${error instanceof Error ? error.message : String(error)}`)
       recommendations.push('Review database configuration and permissions')
       return { healthy: false, issues, recommendations }
     }

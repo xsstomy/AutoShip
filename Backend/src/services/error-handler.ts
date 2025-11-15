@@ -147,7 +147,7 @@ export class ErrorHandler {
    */
   static handleValidationError(error: any): ValidationError {
     if (error instanceof ZodError) {
-      const fieldErrors = error.errors.map(err => ({
+      const fieldErrors = error.issues.map((err: any) => ({
         field: err.path.join('.'),
         message: err.message,
         code: err.code,
@@ -192,19 +192,22 @@ export class ErrorHandler {
 
       // 如果是自定义错误，添加额外信息
       if (error instanceof DatabaseError) {
-        (errorData as any).code = error.code
-        (errorData as any).details = error.details
+        const dbError = error as DatabaseError
+        ;(errorData as any).code = dbError.code
+        ;(errorData as any).details = dbError.details
       }
 
       if (error instanceof ValidationError) {
-        (errorData as any).code = error.code
-        (errorData as any).field = error.field
-        (errorData as any).validationErrors = error.validationErrors
+        const valError = error as ValidationError
+        ;(errorData as any).code = valError.code
+        ;(errorData as any).field = valError.field || undefined
+        ;(errorData as any).validationErrors = valError.validationErrors
       }
 
       if (error instanceof BusinessLogicError) {
-        (errorData as any).code = error.code
-        (errorData as any).context = error.context
+        const bizError = error as BusinessLogicError
+        ;(errorData as any).code = bizError.code
+        ;(errorData as any).context = bizError.context
       }
 
       // 保存到数据库（异步操作，不影响主流程）
