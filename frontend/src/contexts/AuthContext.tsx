@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { ADMIN_API_URL } from '../config/api'
 
 interface Admin {
   id: number
@@ -24,15 +25,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const API_BASE = '/api/v1/admin/auth'
+  const API_BASE = `${ADMIN_API_URL}/auth`
 
   useEffect(() => {
     // 从localStorage恢复token
     const savedToken = localStorage.getItem('admin_token')
     if (savedToken) {
       setToken(savedToken)
+      // 只有存在 token 时才检查认证状态
+      checkAuth()
+    } else {
+      // 没有 token 直接结束加载（避免不必要的请求）
+      setLoading(false)
     }
-    checkAuth()
   }, [])
 
   const checkAuth = async () => {

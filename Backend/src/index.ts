@@ -1,6 +1,14 @@
 import * as dotenv from 'dotenv'
 dotenv.config()
 
+// 启动时验证必需的环境变量
+if (!process.env.JWT_SECRET) {
+  console.error('❌ 严重错误: JWT_SECRET 环境变量未配置!')
+  console.error('请在 .env 文件中设置 JWT_SECRET=你的密钥_至少64个字符')
+  console.error('参考 .env.example 文件第89行')
+  process.exit(1)
+}
+
 import { Hono } from 'hono'
 import { serve } from '@hono/node-server'
 import { cors } from 'hono/cors'
@@ -12,7 +20,6 @@ import adminProductRoutes from './routes/admin-products'
 import adminInventoryRoutes from './routes/admin-inventory'
 import adminOrderRoutes from './routes/admin-orders'
 import productRoutes from './routes/products'
-import testPaymentRoutes from './routes/test-payment'
 import { initDatabase } from './db'
 
 const app = new Hono()
@@ -43,8 +50,7 @@ app.route('/api/v1/admin', adminProductRoutes)
 app.route('/api/v1/admin', adminInventoryRoutes)
 app.route('/api/v1/admin', adminOrderRoutes)
 
-// Test routes (仅开发环境使用)
-app.route('/api/test', testPaymentRoutes)
+// Test routes (已移除)
 
 // Initialize database
 console.log('Initializing database...')

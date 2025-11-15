@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { ADMIN_API_URL } from '../config/api'
 import ProductStatusBadge from '../components/ProductStatusBadge'
 import ProductStatusToggle from '../components/ProductStatusToggle'
 import StatusConfirmDialog from '../components/StatusConfirmDialog'
@@ -405,8 +406,6 @@ export default function AdminProductManagement() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [savingPrice, setSavingPrice] = useState(false)
-  const [creatingProduct, setCreatingProduct] = useState(false)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [searchTerm, setSearchTerm] = useState('')
@@ -458,7 +457,7 @@ export default function AdminProductManagement() {
         params.append('isActive', filterActive === 'active' ? 'true' : 'false')
       }
 
-      const response = await fetch(`/api/v1/admin/products?${params}`, {
+      const response = await fetch(`${ADMIN_API_URL}/products?${params}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -490,12 +489,8 @@ export default function AdminProductManagement() {
 
   // 初始加载和页面/筛选变化时的加载
   useEffect(() => {
-    if (!admin) {
-      navigate('/admin/login')
-      return
-    }
     fetchProducts()
-  }, [admin, navigate, page, filterActive])
+  }, [page, filterActive])
 
   // 监听搜索词变化，自动触发搜索（带防抖）
   useEffect(() => {
@@ -519,7 +514,7 @@ export default function AdminProductManagement() {
     setSavingPrice(true)
 
     try {
-      const response = await fetch(`/api/v1/admin/products/${productId}/prices`, {
+      const response = await fetch(`${ADMIN_API_URL}/products/${productId}/prices`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -564,7 +559,7 @@ export default function AdminProductManagement() {
     setCreatingProduct(true)
 
     try {
-      const response = await fetch('/api/v1/admin/products', {
+      const response = await fetch(`${ADMIN_API_URL}/products`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -621,7 +616,7 @@ export default function AdminProductManagement() {
     setUpdatingStatus(true)
 
     try {
-      const response = await fetch(`/api/v1/admin/products/${statusDialog.productId}/status`, {
+      const response = await fetch(`${ADMIN_API_URL}/products/${statusDialog.productId}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -715,7 +710,7 @@ export default function AdminProductManagement() {
     setUpdatingStatus(true)
 
     try {
-      const response = await fetch('/api/v1/admin/products/batch-status', {
+      const response = await fetch(`${ADMIN_API_URL}/products/batch-status`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -792,10 +787,6 @@ export default function AdminProductManagement() {
     }
   }
 
-  if (!admin) {
-    return null
-  }
-
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
@@ -813,7 +804,7 @@ export default function AdminProductManagement() {
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-gray-700">
-                {admin.username}
+                {admin!.username}
               </span>
               <button
                 onClick={() => navigate('/admin/login')}

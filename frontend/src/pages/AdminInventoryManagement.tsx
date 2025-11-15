@@ -1,16 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
   getInventoryList,
   getInventoryDetail,
-  importInventory,
-  addInventory,
-  deleteInventoryItems,
-  getInventoryStats,
   type ProductInventory,
   type InventoryItem,
-  type InventoryStats,
 } from '../services/inventoryApi'
 
 // 导入模态框组件
@@ -19,7 +14,7 @@ import InventoryDetailModal from '../components/InventoryManagement/InventoryDet
 import AddInventoryModal from '../components/InventoryManagement/AddInventoryModal'
 
 export default function AdminInventoryManagement() {
-  const { admin, token } = useAuth()
+  const { admin } = useAuth()
   const navigate = useNavigate()
 
   const [products, setProducts] = useState<ProductInventory[]>([])
@@ -43,12 +38,8 @@ export default function AdminInventoryManagement() {
   } | null>(null)
 
   useEffect(() => {
-    if (!admin) {
-      navigate('/admin/login')
-      return
-    }
     fetchInventory()
-  }, [admin, navigate, page, filterStatus])
+  }, [page, filterStatus])
 
   useEffect(() => {
     const delayedSearch = setTimeout(() => {
@@ -139,10 +130,6 @@ export default function AdminInventoryManagement() {
     }
   }
 
-  if (!admin) {
-    return null
-  }
-
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
@@ -160,7 +147,7 @@ export default function AdminInventoryManagement() {
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-gray-700">
-                {admin.username}
+                {admin!.username}
               </span>
               <button
                 onClick={() => navigate('/admin/login')}

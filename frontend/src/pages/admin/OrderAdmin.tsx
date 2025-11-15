@@ -9,7 +9,7 @@ import { orderAdminApi } from '../../services/orderAdminApi';
 import type { Order, OrderFilters as OrderFiltersType, FilterOptions } from '../../types/orderAdmin';
 
 export function OrderAdmin() {
-  const { admin, token } = useAuth();
+  const { admin } = useAuth();
   const navigate = useNavigate();
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -44,13 +44,6 @@ export function OrderAdmin() {
     type: null,
     order: null,
   });
-
-  useEffect(() => {
-    if (!admin) {
-      navigate('/admin/login');
-      return;
-    }
-  }, [admin, navigate]);
 
   // 加载订单列表
   const loadOrders = async () => {
@@ -151,10 +144,6 @@ export function OrderAdmin() {
     }
   };
 
-  if (!admin) {
-    return null;
-  }
-
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
@@ -172,7 +161,7 @@ export function OrderAdmin() {
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-gray-700">
-                {admin.username}
+                {admin!.username}
               </span>
               <button
                 onClick={() => navigate('/admin/login')}

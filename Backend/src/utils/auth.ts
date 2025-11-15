@@ -5,9 +5,20 @@ import crypto from 'crypto'
 // 密码哈希配置
 const SALT_ROUNDS = 12
 
-// JWT配置
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
+// JWT配置 - 延迟获取环境变量
 const JWT_EXPIRES_IN = '8h' // 8小时过期
+
+// 获取JWT_SECRET - 延迟到函数调用时
+function getJWTSecret(): string {
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    console.error('❌ 严重错误: JWT_SECRET 环境变量未配置!')
+    console.error('请在 .env 文件中设置 JWT_SECRET=你的密钥_至少64个字符')
+    console.error('参考 .env.example 文件第89行')
+    process.exit(1)
+  }
+  return secret
+}
 
 // 登录失败限制配置
 const MAX_FAILED_ATTEMPTS = 5
@@ -47,7 +58,7 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
  * 生成JWT令牌
  */
 export function generateToken(payload: Omit<AdminTokenPayload, 'iat' | 'exp'>): string {
-  return jwt.sign(payload, JWT_SECRET, {
+  return jwt.sign(payload, getJWTSecret(), {
     expiresIn: JWT_EXPIRES_IN,
   })
 }
@@ -57,7 +68,7 @@ export function generateToken(payload: Omit<AdminTokenPayload, 'iat' | 'exp'>): 
  */
 export function verifyToken(token: string): AdminTokenPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as AdminTokenPayload
+    return jwt.verify(token, getJWTSecret()) as AdminTokenPayload
   } catch (error) {
     return null
   }
