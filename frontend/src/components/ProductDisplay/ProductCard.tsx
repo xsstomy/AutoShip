@@ -13,7 +13,7 @@ interface ProductCardProps {
 /**
  * 商品卡片组件
  */
-const ProductCard: React.FC<ProductCardProps> = ({ product, selectedCurrency, currentPrice }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ product, selectedCurrency: _selectedCurrency, currentPrice }) => {
   const getDeliveryTypeText = (type: string): string => {
     switch (type) {
       case 'text':

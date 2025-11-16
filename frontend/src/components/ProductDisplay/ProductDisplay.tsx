@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Product, Currency } from '../../types/product';
 import { getProducts } from '../../services/productApi';
-import { getCurrencyPreference, convertCurrency } from '../../utils/currency';
+import { getCurrencyPreference } from '../../utils/currency';
 import ProductCard from './ProductCard';
 import CurrencyToggle from './CurrencyToggle';
 import LoadingSpinner from './LoadingSpinner';

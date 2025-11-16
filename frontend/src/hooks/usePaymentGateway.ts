@@ -4,7 +4,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import type { PaymentGateway, PaymentInitResponse } from '../types/payment';
-import { initPayment, generatePaymentWindowName } from '../utils/payment-api';
+import { initPayment } from '../utils/payment-api';
 
 /**
  * Hook 返回值类型

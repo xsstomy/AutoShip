@@ -21,7 +21,8 @@ export default function AddInventoryModal({ isOpen, onClose, onSuccess }: AddInv
   const [priority, setPriority] = useState<number>(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [success, setSuccess] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
 
   useEffect(() => {
     if (isOpen) {
@@ -30,7 +31,8 @@ export default function AddInventoryModal({ isOpen, onClose, onSuccess }: AddInv
       setBatchName('')
       setPriority(0)
       setError('')
-      setSuccess('')
+      setSuccess(false)
+      setSuccessMessage('')
       setProductId(0)
     }
   }, [isOpen])
@@ -81,7 +83,8 @@ export default function AddInventoryModal({ isOpen, onClose, onSuccess }: AddInv
     }
 
     setError('')
-    setSuccess('')
+    setSuccess(false)
+    setSuccessMessage('')
     setLoading(true)
 
     try {
@@ -93,7 +96,8 @@ export default function AddInventoryModal({ isOpen, onClose, onSuccess }: AddInv
       })
 
       // 显示成功消息
-      setSuccess(`成功添加 ${result.count} 项库存`)
+      setSuccess(true)
+      setSuccessMessage(`成功添加 ${result.count} 项库存`)
 
       // 2秒后自动关闭模态框
       setTimeout(() => {
@@ -258,7 +262,7 @@ export default function AddInventoryModal({ isOpen, onClose, onSuccess }: AddInv
         {/* 成功提示 */}
         {success && (
           <div className="mt-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-md text-sm">
-            ✅ {success}
+            ✅ {successMessage}
           </div>
         )}
 

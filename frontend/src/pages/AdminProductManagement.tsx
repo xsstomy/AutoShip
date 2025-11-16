@@ -477,7 +477,7 @@ export default function AdminProductManagement() {
         setProducts(data.data.products)
         setTotalPages(data.data.pagination.totalPages)
       } else {
-        throw new Error(data.error || '获取商品列表失败')
+        throw new Error('获取商品列表失败')
       }
     } catch (err: any) {
       setError(err.message || '加载失败')
@@ -511,8 +511,6 @@ export default function AdminProductManagement() {
   }
 
   const handleSavePrice = async (productId: number, prices: { currency: string; price: number; isActive?: boolean }[]) => {
-    setSavingPrice(true)
-
     try {
       const response = await fetch(`${ADMIN_API_URL}/products/${productId}/prices`, {
         method: 'PUT',
@@ -544,8 +542,6 @@ export default function AdminProductManagement() {
     } catch (err: any) {
       setError(err.message || '更新价格失败')
       console.error('Error saving price:', err)
-    } finally {
-      setSavingPrice(false)
     }
   }
 
@@ -556,8 +552,6 @@ export default function AdminProductManagement() {
     templateText?: string
     prices: { currency: string; price: number; isActive?: boolean }[]
   }) => {
-    setCreatingProduct(true)
-
     try {
       const response = await fetch(`${ADMIN_API_URL}/products`, {
         method: 'POST',
@@ -591,8 +585,6 @@ export default function AdminProductManagement() {
       setError(err.message || '创建商品失败')
       console.error('Error creating product:', err)
       throw err
-    } finally {
-      setCreatingProduct(false)
     }
   }
 

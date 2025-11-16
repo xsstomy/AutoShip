@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { getInventoryDetail, deleteInventoryItems, type ProductInventory, type InventoryItem } from '../../services/inventoryApi'
+import { useState, useEffect } from 'react'
+import { deleteInventoryItems, type ProductInventory, type InventoryItem } from '../../services/inventoryApi'
 
 interface InventoryDetailModalProps {
   product: ProductInventory | null
@@ -22,7 +22,6 @@ export default function InventoryDetailModal({
   onDeleteSuccess,
 }: InventoryDetailModalProps) {
   const [selectedItems, setSelectedItems] = useState<number[]>([])
-  const [loading, setLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 

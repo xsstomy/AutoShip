@@ -23,7 +23,7 @@ interface PaymentStatusProps {
 /**
  * 支付状态组件
  */
-const PaymentStatus: React.FC<PaymentStatusProps> = ({
+const PaymentStatusDisplay: React.FC<PaymentStatusProps> = ({
   status,
   isLoading = false,
   error = null,
@@ -287,4 +287,4 @@ const PaymentStatus: React.FC<PaymentStatusProps> = ({
   );
 };
 
-export default PaymentStatus;
+export default PaymentStatusDisplay;

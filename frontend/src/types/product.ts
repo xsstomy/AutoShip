@@ -39,6 +39,7 @@ export interface Product {
   inventory: Inventory;          // 库存信息
   inventoryStatus: string;       // 库存状态文本
   isActive: boolean;             // 是否激活
+  image?: string;                // 商品图片 URL
   createdAt: string;             // 创建时间
   updatedAt: string;             // 更新时间
 }

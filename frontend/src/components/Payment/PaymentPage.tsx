@@ -10,7 +10,7 @@ import { usePaymentStatus } from '../../hooks/usePaymentStatus';
 import PaymentSummary from './PaymentSummary';
 import PaymentMethods from './PaymentMethods';
 import PaymentRedirect from './PaymentRedirect';
-import PaymentStatusComponent from './PaymentStatus';
+import PaymentStatus from './PaymentStatus';
 
 /**
  * 支付页面组件属性
@@ -192,7 +192,7 @@ const PaymentPage: React.FC<PaymentPageProps> = () => {
         {/* 支付状态展示 */}
         {(paymentStarted || paymentStatus || statusError) && (
           <div className="mb-4 sm:mb-6">
-            <PaymentStatusComponent
+            <PaymentStatus
               status={paymentStatus}
               isLoading={isStatusLoading}
               error={statusError}

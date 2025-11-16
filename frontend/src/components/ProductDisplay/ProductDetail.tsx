@@ -26,7 +26,7 @@ const ProductDetail: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await getProductById(productId);
+      const response = await getProductById(Number(productId));
       setProduct(response.data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '商品加载失败，请稍后重试';
@@ -329,7 +329,7 @@ const ProductDetail: React.FC = () => {
                 onClick={() => {
                   if (product.inventory.available > 0) {
                     const checkoutUrl = buildCheckoutUrl({
-                      productId: product.id,
+                      productId: String(product.id),
                       productName: product.name,
                       price: convertedPrice,
                       currency: currency,

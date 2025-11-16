@@ -5,8 +5,6 @@
 import React from 'react';
 import type { PaymentGateway } from '../../types/payment';
 import type { Currency } from '../../types/product';
-import { getGatewaysByCurrency } from '../../utils/payment-api';
-import type { PaymentGatewayInfo } from '../../utils/payment-api';
 
 /**
  * 支付方式配置
@@ -19,7 +17,7 @@ interface PaymentMethodConfig {
   icon: string;
   iconBg: string;
   recommended?: boolean;
-  features: string[];
+  features: readonly string[];
 }
 
 /**

@@ -42,7 +42,7 @@ export class OrderApiService {
    */
   static async getDownloadUrl(token: string): Promise<string> {
     try {
-      const response = await fetch(`${this.BASE_URL}/api/v1/downloads/${token}`);
+      const response = await fetch(`${API_FULL_URL}/downloads/${token}`);
 
       if (!response.ok) {
         if (response.status === 404) {

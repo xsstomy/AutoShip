@@ -41,7 +41,8 @@ const PaymentRedirect: React.FC<PaymentRedirectProps> = ({
    */
   const getGatewayDisplayName = (gateway: PaymentGateway): string => {
     const gatewayNames: Record<PaymentGateway, string> = {
-      alipay: '支付宝'
+      alipay: '支付宝',
+      creem: 'Creem'
     };
     return gatewayNames[gateway] || gateway;
   };
